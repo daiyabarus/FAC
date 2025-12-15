@@ -1,0 +1,101 @@
+"""
+Column Enumerations for Excel Data
+"""
+from enum import IntEnum
+
+
+class LTECol(IntEnum):
+    """LTE Excel Column Indices"""
+    LTE_BEGIN_TIME = 0
+    LTE_END_TIME = 1
+    LTE_GRANULARITY = 2
+    LTE_GROUP = 3
+    LTE_SUBNET_ID = 4
+    LTE_SUBNET_NAME = 5
+    LTE_ME_ID = 6
+    LTE_ME_NAME = 7
+    LTE_ENB_ID = 8
+    LTE_ENB_NAME = 9
+    LTE_LTE_ID = 10
+    LTE_LTE_NAME = 11
+    LTE_CELL_ID = 12
+    LTE_CELL_NAME = 13
+    LTE_FREQ_BAND = 14
+    LTE_MOC = 15
+    LTE_ENODEB_ID = 16
+    LTE_LOCAL_CELL_ID = 17
+    LTE_PRODUCT = 18
+    LTE_RRC_SSR_NUM = 19
+    LTE_RRC_SSR_DEN = 20
+    LTE_ERAB_SSR_NUM = 21
+    LTE_ERAB_SSR_DEN = 22
+    LTE_S1_SSR_NUM = 23
+    LTE_S1_SSR_DEN = 24
+    LTE_RACH_SETUP_NUM = 25
+    LTE_RACH_SETUP_DEN = 26
+    LTE_HO_SR_NUM = 27
+    LTE_HO_SR_DEN = 28
+    LTE_ERAB_DROP_NUM = 29
+    LTE_ERAB_DROP_DEN = 30
+    LTE_DL_THP_NUM = 31
+    LTE_DL_THP_DEN = 32
+    LTE_UL_THP_NUM = 33
+    LTE_UL_THP_DEN = 34
+    LTE_UL_PLOSS = 35
+    LTE_DL_PLOSS = 36
+    LTE_CQI_NUM = 37
+    LTE_CQI_DEN = 38
+    LTE_RANK_GT2_NUM = 39
+    LTE_RANK_GT2_DEN = 40
+    LTE_RSSI_PUSCH_NUM = 41
+    LTE_RSSI_PUSCH_DEN = 42
+    LTE_RAN_LAT_NUM = 43
+    LTE_RAN_LAT_DEN = 44
+    LTE_DL_VOL_HIGH = 45
+    LTE_DL_VOL_LOW = 46
+    LTE_DL_TIME = 47
+    LTE_OVERLAP_RATE = 48
+    LTE_DL_SE_NUM = 49
+    LTE_DL_SE_DEN = 50
+    LTE_VOLTE_CSSR_NUM = 51
+    LTE_VOLTE_CSSR_DEN = 52
+    LTE_VOLTE_DROP_NUM = 53
+    LTE_VOLTE_DROP_DEN = 54
+    LTE_SRVCC_SR_NUM = 55
+    LTE_SRVCC_SR_DEN = 56
+    LTE_CELL_AVAIL = 57
+    LTE_DL_QPSK_NUM = 58
+    LTE_DL_QPSK_DEN = 59
+    LTE_LTC_NON_CAP = 60
+
+
+class GSMCol(IntEnum):
+    """GSM Excel Column Indices"""
+    GSM_BEGIN_TIME = 0
+    GSM_END_TIME = 1
+    GSM_GRANULARITY = 2
+    GSM_GROUP = 3
+    GSM_SUBNET_ID = 4
+    GSM_SUBNET_NAME = 5
+    GSM_ME_ID = 6
+    GSM_ME_NAME = 7
+    GSM_SITE_ID = 8
+    GSM_SITE_NAME = 9
+    GSM_BTS_ID = 10
+    GSM_BTS_NAME = 11
+    GSM_FREQ_BAND = 12
+    GSM_CSSR_NUM = 13
+    GSM_CSSR_DEN = 14
+    GSM_SDCCH_SR_NUM = 15
+    GSM_SDCCH_SR_DEN = 16
+    GSM_DROP_NUM = 17
+    GSM_DROP_DEN = 18
+
+
+class ClusterCol(IntEnum):
+    """Cluster Excel Column Indices"""
+    CLUSTER_CLUSTER = 0
+    CLUSTER_TOWERID = 1
+    CLUSTER_LTE_CELL = 2
+    CLUSTER_TX = 3
+    CLUSTER_SITENAME = 4
