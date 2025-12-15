@@ -1,7 +1,9 @@
 """
 FAC Report Generator - Main Entry Point
-Fixed template path: ./datatemplate.xlsx
+Author: Network Optimization Team
+Description: Generate FAC KPI Achievement reports from LTE, GSM, and Cluster data
 """
+
 import sys
 from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow
@@ -10,13 +12,17 @@ from ui.main_window import MainWindow
 def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
-    app.setStyle('Fusion')  # Modern style
 
+    # Set application style
+    app.setStyle("Fusion")
+
+    # Create and show main window
     window = MainWindow()
     window.show()
 
+    # Run application
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

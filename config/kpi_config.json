@@ -1,389 +1,348 @@
 {
-  "2g_ran_kpis": [
-    {
+  "gsm_kpis": {
+    "cssr": {
       "name": "Call Setup Success Rate",
-      "formula": "GSM_CSSR_NUM / GSM_CSSR_DEN * 100",
-      "baseline": ">=98.5",
-      "target": ">=95",
+      "formula": "GSM_CSSR_NUM/GSM_CSSR_DEN*100",
+      "baseline": 98.5,
+      "operator": ">=",
+      "target": 95,
+      "cell_row": 14,
       "clause_type": "Accessibility",
-      "kpi_domain": "RAN",
-      "reference": "2G RAN",
-      "cells": {
-        "month1": { "value": "M14", "result": "N14" },
-        "month2": { "value": "O14", "result": "P14" },
-        "month3": { "value": "Q14", "result": "R14" }
-      }
+      "reference": "2G RAN"
     },
-    {
+    "sdcch_sr": {
       "name": "SDCCH Success rate",
-      "formula": "GSM_SDCCH_SR_NUM / GSM_SDCCH_SR_DEN * 100",
-      "baseline": ">=98.5",
-      "target": ">=95",
+      "formula": "GSM_SDCCH_SR_NUM/GSM_SDCCH_SR_DEN*100",
+      "baseline": 98.5,
+      "operator": ">=",
+      "target": 95,
+      "cell_row": 15,
       "clause_type": "Accessibility",
-      "kpi_domain": "RAN",
-      "reference": "2G RAN",
-      "cells": {
-        "month1": { "value": "M15", "result": "N15" },
-        "month2": { "value": "O15", "result": "P15" },
-        "month3": { "value": "Q15", "result": "R15" }
-      }
+      "reference": "2G RAN"
     },
-    {
+    "drop_rate": {
       "name": "Perceive Drop Rate",
-      "formula": "GSM_DROP_NUM / GSM_DROP_DEN * 100",
-      "baseline": "<2",
-      "target": ">=95",
+      "formula": "GSM_DROP_NUM/GSM_DROP_DEN*100",
+      "baseline": 2,
+      "operator": "<",
+      "target": 95,
+      "cell_row": 16,
       "clause_type": "Retainability",
-      "kpi_domain": "RAN",
-      "reference": "2G RAN",
-      "cells": {
-        "month1": { "value": "M16", "result": "N16" },
-        "month2": { "value": "O16", "result": "P16" },
-        "month3": { "value": "Q16", "result": "R16" }
-      }
+      "reference": "2G RAN"
     }
-  ],
-  "4g_ran_kpis": [
-    {
+  },
+  "lte_kpis": {
+    "session_ssr": {
       "name": "Session Setup Success Rate",
-      "formula": "100 * (LTE_RRC_SSR_NUM/LTE_RRC_SSR_DEN) * (LTE_ERAB_SSR_NUM/LTE_ERAB_SSR_DEN) * (LTE_S1_SSR_NUM/LTE_S1_SSR_DEN)",
-      "baseline": ">=99",
-      "target": ">=97",
+      "formula": "100*(LTE_RRC_SSR_NUM/LTE_RRC_SSR_DEN)*(LTE_ERAB_SSR_NUM/LTE_ERAB_SSR_DEN)*(LTE_S1_SSR_NUM/LTE_S1_SSR_DEN)",
+      "baseline": 99,
+      "operator": ">=",
+      "target": 97,
+      "cell_row": 17,
       "clause_type": "Accessibility",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M17", "result": "N17" },
-        "month2": { "value": "O17", "result": "P17" },
-        "month3": { "value": "Q17", "result": "R17" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "rach_sr_high": {
       "name": "RACH Success Rate",
-      "formula": "100 * (LTE_RACH_SETUP_NUM/LTE_RACH_SETUP_DEN)",
-      "baseline": ">=85",
-      "target": ">=60",
+      "formula": "100*(LTE_RACH_SETUP_NUM/LTE_RACH_SETUP_DEN)",
+      "baseline": 85,
+      "operator": ">=",
+      "target": 60,
+      "cell_row": 18,
       "clause_type": "Accessibility",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "conditions": [
-        { "baseline": ">=85", "target": ">=60" },
-        { "baseline": "<55", "target": "<3" }
-      ],
-      "cells": {
-        "month1": [
-          { "value": "M18", "result": "N18" },
-          { "value": "M19", "result": "N19" }
-        ],
-        "month2": [
-          { "value": "O18", "result": "P18" },
-          { "value": "O19", "result": "P19" }
-        ],
-        "month3": [
-          { "value": "Q18", "result": "R18" },
-          { "value": "Q19", "result": "R19" }
-        ]
-      }
+      "reference": "4G RAN"
     },
-    {
+    "rach_sr_low": {
+      "name": "RACH Success Rate",
+      "formula": "100*(LTE_RACH_SETUP_NUM/LTE_RACH_SETUP_DEN)",
+      "baseline": 55,
+      "operator": "<",
+      "target": 3,
+      "cell_row": 19,
+      "clause_type": "Accessibility",
+      "reference": "4G RAN"
+    },
+    "ho_sr": {
       "name": "Handover Success Rate Inter and Intra-Frequency",
-      "formula": "100 * (LTE_HO_SR_NUM/LTE_HO_SR_DEN)",
-      "baseline": ">=97",
-      "target": ">=95",
+      "formula": "100*(LTE_HO_SR_NUM/LTE_HO_SR_DEN)",
+      "baseline": 97,
+      "operator": ">=",
+      "target": 95,
+      "cell_row": 20,
       "clause_type": "Mobility",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M20", "result": "N20" },
-        "month2": { "value": "O20", "result": "P20" },
-        "month3": { "value": "Q20", "result": "R20" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "erab_drop": {
       "name": "E-RAB Drop Rate",
-      "formula": "100 * (LTE_ERAB_DROP_NUM/LTE_ERAB_DROP_DEN)",
-      "baseline": "<2",
-      "target": ">=95",
+      "formula": "100*(LTE_ERAB_DROP_NUM/LTE_ERAB_DROP_DEN)",
+      "baseline": 2,
+      "operator": "<",
+      "target": 95,
+      "cell_row": 21,
       "clause_type": "Retainability",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M21", "result": "N21" },
-        "month2": { "value": "O21", "result": "P21" },
-        "month3": { "value": "Q21", "result": "R21" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "dl_thp_high": {
       "name": "Downlink User Throughput",
       "formula": "LTE_DL_THP_NUM/LTE_DL_THP_DEN",
-      "baseline": ">=3",
-      "target": ">=85",
+      "baseline": 3,
+      "operator": ">=",
+      "target": 85,
+      "cell_row": 22,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "conditions": [
-        { "baseline": ">=3", "target": ">=85" },
-        { "baseline": "<1", "target": "<2" }
-      ],
-      "cells": {
-        "month1": [
-          { "value": "M22", "result": "N22" },
-          { "value": "M23", "result": "N23" }
-        ],
-        "month2": [
-          { "value": "O22", "result": "P22" },
-          { "value": "O23", "result": "P23" }
-        ],
-        "month3": [
-          { "value": "Q22", "result": "R22" },
-          { "value": "Q23", "result": "R23" }
-        ]
-      }
+      "reference": "4G RAN"
     },
-    {
+    "dl_thp_low": {
+      "name": "Downlink User Throughput",
+      "formula": "LTE_DL_THP_NUM/LTE_DL_THP_DEN",
+      "baseline": 1,
+      "operator": "<",
+      "target": 2,
+      "cell_row": 23,
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "ul_thp_high": {
       "name": "Uplink User Throughput",
       "formula": "LTE_UL_THP_NUM/LTE_UL_THP_DEN",
-      "baseline": ">=1",
-      "target": ">=65",
+      "baseline": 1,
+      "operator": ">=",
+      "target": 65,
+      "cell_row": 24,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "conditions": [
-        { "baseline": ">=1", "target": ">=65" },
-        { "baseline": "<0.256", "target": "<2" }
-      ],
-      "cells": {
-        "month1": [
-          { "value": "M24", "result": "N24" },
-          { "value": "M25", "result": "N25" }
-        ],
-        "month2": [
-          { "value": "O24", "result": "P24" },
-          { "value": "O25", "result": "P25" }
-        ],
-        "month3": [
-          { "value": "Q24", "result": "R24" },
-          { "value": "Q25", "result": "R25" }
-        ]
-      }
+      "reference": "4G RAN"
     },
-    {
+    "ul_thp_low": {
+      "name": "Uplink User Throughput",
+      "formula": "LTE_UL_THP_NUM/LTE_UL_THP_DEN",
+      "baseline": 0.256,
+      "operator": "<",
+      "target": 2,
+      "cell_row": 25,
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "ul_ploss": {
       "name": "UL Packet Loss (PDCP )",
       "formula": "LTE_UL_PLOSS",
-      "baseline": "<0.85",
-      "target": ">=97",
+      "baseline": 0.85,
+      "operator": "<",
+      "target": 97,
+      "cell_row": 26,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M26", "result": "N26" },
-        "month2": { "value": "O26", "result": "P26" },
-        "month3": { "value": "Q26", "result": "R26" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "dl_ploss": {
       "name": "DL Packet Loss (PDCP )",
       "formula": "LTE_DL_PLOSS",
-      "baseline": "<0.10",
-      "target": ">=97",
+      "baseline": 0.1,
+      "operator": "<",
+      "target": 97,
+      "cell_row": 27,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M27", "result": "N27" },
-        "month2": { "value": "O27", "result": "P27" },
-        "month3": { "value": "Q27", "result": "R27" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "cqi": {
       "name": "CQI",
       "formula": "LTE_CQI_NUM/LTE_CQI_DEN",
-      "baseline": ">=7",
-      "target": ">=95",
+      "baseline": 7,
+      "operator": ">=",
+      "target": 95,
+      "cell_row": 28,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M28", "result": "N28" },
-        "month2": { "value": "O28", "result": "P28" },
-        "month3": { "value": "Q28", "result": "R28" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "mimo_rank2_high": {
       "name": "MIMO Transmission Rank2 Rate",
-      "formula": "100 * (LTE_RANK_GT2_NUM/LTE_RANK_GT2_DEN)",
-      "baseline": ">=35",
-      "target": ">=70",
+      "formula": "100*(LTE_RANK_GT2_NUM/LTE_RANK_GT2_DEN)",
+      "baseline": 35,
+      "operator": ">=",
+      "target": 70,
+      "cell_row": 29,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "conditions": [
-        { "baseline": ">=35", "target": ">=70" },
-        { "baseline": "<20", "target": "<5" }
-      ],
-      "cells": {
-        "month1": [
-          { "value": "M29", "result": "N29" },
-          { "value": "M30", "result": "N30" }
-        ],
-        "month2": [
-          { "value": "O29", "result": "P29" },
-          { "value": "O30", "result": "P30" }
-        ],
-        "month3": [
-          { "value": "Q29", "result": "R29" },
-          { "value": "Q30", "result": "R30" }
-        ]
-      }
+      "reference": "4G RAN"
     },
-    {
+    "mimo_rank2_low": {
+      "name": "MIMO Transmission Rank2 Rate",
+      "formula": "100*(LTE_RANK_GT2_NUM/LTE_RANK_GT2_DEN)",
+      "baseline": 20,
+      "operator": "<",
+      "target": 5,
+      "cell_row": 30,
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "ul_rssi": {
       "name": "UL RSSI",
       "formula": "LTE_RSSI_PUSCH_NUM/LTE_RSSI_PUSCH_DEN",
-      "baseline": "<-105",
-      "target": ">=97",
+      "baseline": -105,
+      "operator": "<",
+      "target": 97,
+      "cell_row": 31,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M31", "result": "N31" },
-        "month2": { "value": "O31", "result": "P31" },
-        "month3": { "value": "Q31", "result": "R31" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "latency_low": {
       "name": "Packet Latency",
       "formula": "LTE_RAN_LAT_NUM/LTE_RAN_LAT_DEN",
-      "baseline": "<30",
-      "target": ">=95",
+      "baseline": 30,
+      "operator": "<",
+      "target": 95,
+      "cell_row": 32,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "conditions": [
-        { "baseline": "<30", "target": ">=95" },
-        { "baseline": ">30 and <40", "target": "<5" }
-      ],
-      "cells": {
-        "month1": [
-          { "value": "M32", "result": "N32" },
-          { "value": "M33", "result": "N33" }
-        ],
-        "month2": [
-          { "value": "O32", "result": "P32" },
-          { "value": "O33", "result": "P33" }
-        ],
-        "month3": [
-          { "value": "Q32", "result": "R32" },
-          { "value": "Q33", "result": "R33" }
-        ]
-      }
+      "reference": "4G RAN"
     },
-    {
+    "latency_medium": {
+      "name": "Packet Latency",
+      "formula": "LTE_RAN_LAT_NUM/LTE_RAN_LAT_DEN",
+      "baseline_range": [30, 40],
+      "operator": "between",
+      "target": 5,
+      "cell_row": 33,
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "ltc_non_cap": {
       "name": "LTC Non Capacity",
       "formula": "LTE_LTC_NON_CAP",
-      "baseline": "<3",
-      "target": "<5",
+      "baseline": 3,
+      "operator": "<",
+      "target": 5,
+      "cell_row": 34,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M34", "result": "N34" },
-        "month2": { "value": "O34", "result": "P34" },
-        "month3": { "value": "Q34", "result": "R34" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "overlap_rate": {
       "name": "Coverage Overlaping ratio ",
       "formula": "LTE_OVERLAP_RATE",
-      "baseline": "<35",
-      "target": "<80",
+      "baseline": 35,
+      "operator": "<",
+      "target": 80,
+      "cell_row": 35,
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M35", "result": "N35" },
-        "month2": { "value": "O35", "result": "P35" },
-        "month3": { "value": "Q35", "result": "R35" }
-      }
+      "reference": "4G RAN"
     },
-    {
+    "volte_cssr": {
+      "name": "Voice Call Success Rate (VoLTE)",
+      "formula": "LTE_VOLTE_CSSR_NUM/LTE_VOLTE_CSSR_DEN*100",
+      "baseline": 97,
+      "operator": ">",
+      "target": 95,
+      "cell_row": 45,
+      "clause_type": "VoLTE",
+      "reference": "4G RAN"
+    },
+    "volte_drop": {
+      "name": "Voice Call Drop Rate (VoLTE)",
+      "formula": "LTE_VOLTE_DROP_NUM/LTE_VOLTE_DROP_DEN*100",
+      "baseline": 2,
+      "operator": "<",
+      "target": 95,
+      "cell_row": 46,
+      "clause_type": "VoLTE",
+      "reference": "4G RAN"
+    },
+    "srvcc_sr": {
+      "name": "SRVCC Success Rate",
+      "formula": "LTE_SRVCC_SR_NUM/LTE_SRVCC_SR_DEN*100",
+      "baseline": 97,
+      "operator": ">=",
+      "target": 95,
+      "cell_row": 47,
+      "clause_type": "VoLTE",
+      "reference": "4G RAN"
+    }
+  },
+  "spectral_efficiency": {
+    "se_850_2t2r": {
       "name": "Spectral Efficiency",
       "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
-      "baseline": "dynamic",
-      "target": ">90",
+      "baseline": 1.1,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 36,
+      "tx": "2T2R",
+      "band": "850",
       "clause_type": "Integrity",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": [
-          { "value": "M36", "result": "N36", "config": "2T2R_850" },
-          { "value": "M37", "result": "N37", "config": "2T2R_900" },
-          { "value": "M38", "result": "N38", "config": "2T2R_2100" },
-          { "value": "M39", "result": "N39", "config": "2T2R_1800" },
-          { "value": "M40", "result": "N40", "config": "4T4R_1800" },
-          { "value": "M41", "result": "N41", "config": "4T4R_2100" },
-          { "value": "M42", "result": "N42", "config": "32T32R_2300" }
-        ],
-        "month2": [
-          { "value": "O36", "result": "P36", "config": "2T2R_850" },
-          { "value": "O37", "result": "P37", "config": "2T2R_900" },
-          { "value": "O38", "result": "P38", "config": "2T2R_2100" },
-          { "value": "O39", "result": "P39", "config": "2T2R_1800" },
-          { "value": "O40", "result": "P40", "config": "4T4R_1800" },
-          { "value": "O41", "result": "P41", "config": "4T4R_2100" },
-          { "value": "O42", "result": "P42", "config": "32T32R_2300" }
-        ],
-        "month3": [
-          { "value": "Q36", "result": "R36", "config": "2T2R_850" },
-          { "value": "Q37", "result": "R37", "config": "2T2R_900" },
-          { "value": "Q38", "result": "R38", "config": "2T2R_2100" },
-          { "value": "Q39", "result": "R39", "config": "2T2R_1800" },
-          { "value": "Q40", "result": "R40", "config": "4T4R_1800" },
-          { "value": "Q41", "result": "R41", "config": "4T4R_2100" },
-          { "value": "Q42", "result": "R42", "config": "32T32R_2300" }
-        ]
-      }
+      "reference": "4G RAN"
     },
-    {
-      "name": "Voice Call Success Rate (VoLTE)",
-      "formula": "LTE_VOLTE_CSSR_NUM/LTE_VOLTE_CSSR_DEN * 100",
-      "baseline": ">=97",
-      "target": ">95",
-      "clause_type": "VoLTE",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M45", "result": "N45" },
-        "month2": { "value": "O45", "result": "P45" },
-        "month3": { "value": "Q45", "result": "R45" }
-      }
+    "se_900_2t2r": {
+      "name": "Spectral Efficiency",
+      "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
+      "baseline": 1.1,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 37,
+      "tx": "2T2R",
+      "band": "900",
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
     },
-    {
-      "name": "Voice Call Drop Rate (VoLTE)",
-      "formula": "LTE_VOLTE_DROP_NUM/LTE_VOLTE_DROP_DEN * 100",
-      "baseline": "<2",
-      "target": ">95",
-      "clause_type": "VoLTE",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M46", "result": "N46" },
-        "month2": { "value": "O46", "result": "P46" },
-        "month3": { "value": "Q46", "result": "R46" }
-      }
+    "se_2100_2t2r": {
+      "name": "Spectral Efficiency",
+      "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
+      "baseline": 1.3,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 38,
+      "tx": "2T2R",
+      "band": "2100",
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
     },
-    {
-      "name": "SRVCC Success Rate",
-      "formula": "LTE_SRVCC_SR_NUM/LTE_SRVCC_SR_DEN * 100",
-      "baseline": ">=97",
-      "target": ">95",
-      "clause_type": "VoLTE",
-      "kpi_domain": "RAN",
-      "reference": "4G RAN",
-      "cells": {
-        "month1": { "value": "M47", "result": "N47" },
-        "month2": { "value": "O47", "result": "P47" },
-        "month3": { "value": "Q47", "result": "R47" }
-      }
+    "se_1800_2t2r": {
+      "name": "Spectral Efficiency",
+      "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
+      "baseline": 1.25,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 39,
+      "tx": "2T2R",
+      "band": "1800",
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "se_1800_4t4r": {
+      "name": "Spectral Efficiency",
+      "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
+      "baseline": 1.5,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 40,
+      "tx": ["4T4R", "8T8R"],
+      "band": "1800",
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "se_2100_4t4r": {
+      "name": "Spectral Efficiency",
+      "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
+      "baseline": 1.7,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 41,
+      "tx": ["4T4R", "8T8R"],
+      "band": ["2100", "2300"],
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
+    },
+    "se_2300_32t32r": {
+      "name": "Spectral Efficiency",
+      "formula": "LTE_DL_SE_NUM/LTE_DL_SE_DEN",
+      "baseline": 2.1,
+      "operator": ">=",
+      "target": 90,
+      "cell_row": 43,
+      "tx": "32T32R",
+      "band": "2300",
+      "clause_type": "Integrity",
+      "reference": "4G RAN"
     }
-  ]
+  },
+  "band_mapping": {
+    "5": "850",
+    "3": "1800",
+    "1": "2100",
+    "40": "2300"
+  }
 }

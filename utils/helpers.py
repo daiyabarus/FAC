@@ -1,47 +1,131 @@
-"""
-Helper utility functions
-"""
+"""Helper utility functions"""
+
 import re
 from datetime import datetime
+import pandas as pd
+import numpy as np
 
 
-def clean_cell_name(name: str) -> str:
-    """Clean cell name for display"""
-    if not name:
-        return ""
-    return str(name).strip()
+def clean_numeric(value):
+    """Clean numeric values - remove commas and percentages"""
+    if pd.isna(value) or value is None:
+        return None
 
+    if isinstance(value, (int, float)):
+        return float(value)
 
-def format_percentage(value: float, decimals: int = 2) -> str:
-    """Format value as percentage"""
-    if value is None:
-        return "N/A"
-    return f"{round(value, decimals)}%"
+    # Convert to string and clean
+    str_val = str(value).strip()
 
+    # Remove percentage sign
+    if "%" in str_val:
+        str_val = str_val.replace("%", "")
+        try:
+            return float(str_val) / 100
+        except:
+            return None
 
-def format_date_range(start_date, end_date) -> str:
-    """Format date range for display - cross-platform compatible"""
-    if not start_date or not end_date:
-        return ""
+    # Remove commas (thousand separator)
+    str_val = str_val.replace(",", "")
 
     try:
-        # Convert to datetime if string
-        start = datetime.strptime(
-            str(start_date), '%Y-%m-%d') if isinstance(start_date, str) else start_date
-        end = datetime.strptime(
-            str(end_date), '%Y-%m-%d') if isinstance(end_date, str) else end_date
-
-        # Safe formatting (works on both Windows and Unix)
-        start_str = f"{start.day} {start.strftime('%B')}"
-        end_str = f"{end.day} {end.strftime('%B')}"
-
-        return f"{start_str} to {end_str}"
-    except Exception as e:
-        return f"{start_date} to {end_date}"
+        return float(str_val)
+    except:
+        return None
 
 
-def extract_tower_id_from_name(name: str) -> str:
-    """Extract TOWER ID using regex pattern"""
+def extract_tower_id(me_name):
+    """Extract tower ID from ME name using regex #tower_id#"""
+    if pd.isna(me_name):
+        return None
+
     pattern = r"#([^#]+)#"
-    match = re.search(pattern, str(name))
-    return match.group(1) if match else None
+    match = re.search(pattern, str(me_name))
+
+    if match:
+        return match.group(1)
+    return None
+
+
+def map_frequency_band(freq_band):
+    """Map frequency band number to actual frequency"""
+    band_map = {5: 850, 3: 1800, 1: 2100, 40: 2300}
+
+    try:
+        band_num = int(freq_band)
+        return band_map.get(band_num, None)
+    except:
+        return None
+
+
+def format_date_mdy(date_str):
+    """Convert date from YYYY-MM-DD to M/D/YYYY"""
+    try:
+        if isinstance(date_str, str):
+            dt = pd.to_datetime(date_str)
+        else:
+            dt = date_str
+        return dt.strftime("%-m/%-d/%Y")
+    except:
+        return None
+
+
+def format_date_mmm_yy(date_str):
+    """Convert date to MMM-YY format (e.g., Sep-25)"""
+    try:
+        if isinstance(date_str, str):
+            dt = pd.to_datetime(date_str)
+        else:
+            dt = date_str
+        return dt.strftime("%b-%y")
+    except:
+        return None
+
+
+def format_month_name(date_str):
+    """Get full month name (e.g., September)"""
+    try:
+        if isinstance(date_str, str):
+            dt = pd.to_datetime(date_str)
+        else:
+            dt = date_str
+        return dt.strftime("%B")
+    except:
+        return None
+
+
+def format_date_range(start_date, end_date):
+    """Format date range (e.g., 1 October - 31 October)"""
+    try:
+        if isinstance(start_date, str):
+            start_dt = pd.to_datetime(start_date)
+        else:
+            start_dt = start_date
+
+        if isinstance(end_date, str):
+            end_dt = pd.to_datetime(end_date)
+        else:
+            end_dt = end_date
+
+        return f"{start_dt.day} {start_dt.strftime('%B')} - {end_dt.day} {end_dt.strftime('%B')}"
+    except:
+        return None
+
+
+def get_three_month_range(dates):
+    """Get 3-month range string (e.g., 1st October to 31st December)"""
+    try:
+        sorted_dates = sorted([pd.to_datetime(d) for d in dates])
+        start = sorted_dates[0]
+        end = sorted_dates[-1]
+
+        # Add ordinal suffix
+        def ordinal(n):
+            suffix = ["th", "st", "nd", "rd"] + ["th"] * 6
+            if 10 <= n % 100 <= 20:
+                return f"{n}th"
+            return f"{n}{suffix[n % 10]}"
+
+        return f"{ordinal(start.day)} {start.strftime('%B')} to {ordinal(end.day)} {end.strftime('%B')}"
+    except:
+        return None

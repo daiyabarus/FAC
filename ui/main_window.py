@@ -1,391 +1,361 @@
-"""
-Main Window for FAC Report Generator
-Modern PyQt6 UI with file browser and output selection
-"""
+"""Main PyQt6 GUI window"""
+
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QLineEdit, QFileDialog,
-    QProgressBar, QMessageBox, QGroupBox, QTextEdit
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QLineEdit,
+    QFileDialog,
+    QTextEdit,
+    QProgressBar,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
 from pathlib import Path
-from services.report_generator import ReportGenerator
 
 
 class ProcessThread(QThread):
-    """Background thread for processing reports"""
-    progress = pyqtSignal(int)
-    status = pyqtSignal(str)
+    """Background thread for processing"""
+
+    progress = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, lte_file, gsm_file, cluster_file, output_dir):
+    def __init__(self, lte_file, gsm_file, cluster_file, output_dir, template_file):
         super().__init__()
         self.lte_file = lte_file
         self.gsm_file = gsm_file
         self.cluster_file = cluster_file
         self.output_dir = output_dir
+        self.template_file = template_file
 
     def run(self):
-        """Run report generation in background"""
+        """Run the processing"""
         try:
-            self.status.emit("Loading template...")
-            self.progress.emit(10)
+            from data.loader import DataLoader
+            from data.transformer import DataTransformer
+            from kpi.calculator import KPICalculator
+            from kpi.validator import KPIValidator
+            from report.excel_writer import ExcelReportWriter
+            from assets.logos import get_xlsmart_logo, get_zte_logo
 
-            generator = ReportGenerator()
+            # Load data
+            self.progress.emit("Loading data files...")
+            loader = DataLoader()
+            loader.load_lte_file(self.lte_file)
+            loader.load_gsm_file(self.gsm_file)
+            loader.load_cluster_file(self.cluster_file)
 
-            self.status.emit("Loading data files...")
-            self.progress.emit(20)
+            # Transform data
+            self.progress.emit("Transforming and enriching data...")
+            transformer = DataTransformer(loader)
+            transformed_data = transformer.transform_all()
 
-            generator.load_data(
-                self.lte_file,
-                self.gsm_file,
-                self.cluster_file
-            )
+            # Calculate KPIs
+            self.progress.emit("Calculating KPIs...")
+            calculator = KPICalculator(transformed_data)
+            kpi_data = calculator.calculate_all()
 
-            self.status.emit("Processing data...")
-            self.progress.emit(40)
+            # Validate KPIs
+            self.progress.emit("Validating KPIs against baselines...")
+            validator = KPIValidator(kpi_data)
+            validation_results = validator.validate_all()
 
-            generator.process_data()
+            # Generate reports
+            self.progress.emit("Generating Excel reports...")
 
-            self.status.emit("Calculating KPIs...")
-            self.progress.emit(60)
+            clusters = transformed_data["lte"]["CLUSTER"].dropna().unique()
 
-            generator.calculate_kpis()
+            for cluster in clusters:
+                self.progress.emit(f"Writing report for {cluster}...")
 
-            self.status.emit("Generating charts...")
-            self.progress.emit(80)
+                writer = ExcelReportWriter(
+                    self.template_file,
+                    self.output_dir,
+                    validation_results,
+                    kpi_data,
+                    transformed_data,
+                )
 
-            generator.generate_charts()
+                # Set logos
+                writer.set_logos(get_xlsmart_logo(), get_zte_logo())
 
-            self.status.emit("Writing Excel reports...")
-            self.progress.emit(90)
+                # Write report
+                writer.write_report(cluster)
 
-            output_files = generator.generate_reports(self.output_dir)
-
-            self.progress.emit(100)
-            self.finished.emit(
-                True, f"Success! Generated {len(output_files)} reports")
+            self.progress.emit("✓ All reports generated successfully!")
+            self.finished.emit(True, f"Generated {len(clusters)} reports")
 
         except Exception as e:
-            self.finished.emit(False, f"Error: {str(e)}")
+            import traceback
+
+            error_detail = traceback.format_exc()
+            self.progress.emit(f"✗ Error: {str(e)}")
+            self.progress.emit(error_detail)
+            self.finished.emit(False, str(e))
 
 
 class MainWindow(QMainWindow):
     """Main application window"""
-
-    TEMPLATE_PATH = "./datatemplate.xlsx"
 
     def __init__(self):
         super().__init__()
         self.init_ui()
 
     def init_ui(self):
-        """Initialize user interface"""
+        """Initialize the user interface"""
         self.setWindowTitle("FAC Report Generator")
-        self.setMinimumSize(800, 600)
-
-        # Apply modern styling
-        self.apply_modern_style()
+        self.setGeometry(100, 100, 900, 700)
 
         # Central widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
         # Main layout
-        layout = QVBoxLayout(central_widget)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         # Title
-        title = QLabel("FAC Report Generator")
-        title_font = QFont("Segoe UI", 24, QFont.Weight.Bold)
+        title = QLabel("FAC KPI Report Generator")
+        title_font = QFont()
+        title_font.setPointSize(18)
+        title_font.setBold(True)
         title.setFont(title_font)
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(title)
 
-        # Template info
-        template_label = QLabel(f"📋 Template: {self.TEMPLATE_PATH}")
-        template_label.setStyleSheet("color: #666; font-size: 12px;")
-        layout.addWidget(template_label)
+        # Subtitle
+        subtitle = QLabel("Generate FAC reports from LTE, GSM, and Cluster data")
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle.setStyleSheet("color: #666; font-size: 12px;")
+        layout.addWidget(subtitle)
 
-        # Input files group
-        input_group = self.create_input_group()
-        layout.addWidget(input_group)
+        layout.addSpacing(20)
 
-        # Output directory group
-        output_group = self.create_output_group()
-        layout.addWidget(output_group)
+        # File inputs
+        self.lte_input = self._create_file_input(
+            "LTE Data File (Excel):", "Browse LTE File"
+        )
+        self.gsm_input = self._create_file_input(
+            "GSM Data File (Excel):", "Browse GSM File"
+        )
+        self.cluster_input = self._create_file_input(
+            "Cluster Data File (Excel):", "Browse Cluster File"
+        )
 
-        # Progress section
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setTextVisible(True)
-        layout.addWidget(self.progress_bar)
+        layout.addLayout(self.lte_input["layout"])
+        layout.addLayout(self.gsm_input["layout"])
+        layout.addLayout(self.cluster_input["layout"])
 
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #666; font-style: italic;")
-        layout.addWidget(self.status_label)
+        layout.addSpacing(10)
 
-        # Log area
-        log_group = QGroupBox("Processing Log")
-        log_layout = QVBoxLayout()
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        self.log_text.setMaximumHeight(150)
-        self.log_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #1e1e1e;
-                color: #00ff00;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 10px;
-                border: 1px solid #444;
-                border-radius: 5px;
-            }
-        """)
-        log_layout.addWidget(self.log_text)
-        log_group.setLayout(log_layout)
-        layout.addWidget(log_group)
+        # PERBAIKAN 1: Hardcode template - no browse button
+        template_info = QLabel("📄 Template: datatemplate.xlsx (hardcoded)")
+        template_info.setStyleSheet("color: #666; font-style: italic; padding: 5px;")
+        layout.addWidget(template_info)
+
+        # Output directory
+        self.output_input = self._create_folder_input(
+            "Output Directory:", "Browse Output Folder"
+        )
+        layout.addLayout(self.output_input["layout"])
+
+        layout.addSpacing(20)
 
         # Generate button
-        self.generate_btn = QPushButton("🚀 Generate Reports")
-        self.generate_btn.setMinimumHeight(50)
-        self.generate_btn.clicked.connect(self.generate_reports)
+        self.generate_btn = QPushButton("Generate Reports")
+        self.generate_btn.setMinimumHeight(45)
         self.generate_btn.setStyleSheet("""
             QPushButton {
-                background-color: #0078d4;
+                background-color: #4CAF50;
                 color: white;
+                font-size: 14px;
+                font-weight: bold;
                 border: none;
                 border-radius: 5px;
-                font-size: 16px;
-                font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #106ebe;
+                background-color: #45a049;
             }
             QPushButton:pressed {
-                background-color: #005a9e;
+                background-color: #3d8b40;
             }
             QPushButton:disabled {
                 background-color: #cccccc;
-                color: #666666;
             }
         """)
+        self.generate_btn.clicked.connect(self.generate_reports)
         layout.addWidget(self.generate_btn)
 
-        # Add stretch
-        layout.addStretch()
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setTextVisible(False)
+        layout.addWidget(self.progress_bar)
 
-    def create_input_group(self):
-        """Create input files group"""
-        group = QGroupBox("Input Files")
-        layout = QVBoxLayout()
+        # Log output
+        log_label = QLabel("Processing Log:")
+        log_label.setStyleSheet("font-weight: bold;")
+        layout.addWidget(log_label)
 
-        # LTE File
-        lte_layout = QHBoxLayout()
-        lte_label = QLabel("LTE Data:")
-        lte_label.setMinimumWidth(100)
-        self.lte_input = QLineEdit()
-        self.lte_input.setPlaceholderText("Select LTE Excel file (Sheet0)...")
-        lte_btn = QPushButton("📁 Browse")
-        lte_btn.clicked.connect(
-            lambda: self.browse_file(self.lte_input, "LTE"))
-        lte_layout.addWidget(lte_label)
-        lte_layout.addWidget(self.lte_input)
-        lte_layout.addWidget(lte_btn)
-        layout.addLayout(lte_layout)
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setMinimumHeight(200)
+        self.log_output.setStyleSheet("""
+            QTextEdit {
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                font-family: 'Courier New', monospace;
+                font-size: 11px;
+            }
+        """)
+        layout.addWidget(self.log_output)
 
-        # GSM File
-        gsm_layout = QHBoxLayout()
-        gsm_label = QLabel("GSM Data:")
-        gsm_label.setMinimumWidth(100)
-        self.gsm_input = QLineEdit()
-        self.gsm_input.setPlaceholderText("Select GSM Excel file (Sheet0)...")
-        gsm_btn = QPushButton("📁 Browse")
-        gsm_btn.clicked.connect(
-            lambda: self.browse_file(self.gsm_input, "GSM"))
-        gsm_layout.addWidget(gsm_label)
-        gsm_layout.addWidget(self.gsm_input)
-        gsm_layout.addWidget(gsm_btn)
-        layout.addLayout(gsm_layout)
+        central_widget.setLayout(layout)
 
-        # Cluster File
-        cluster_layout = QHBoxLayout()
-        cluster_label = QLabel("Cluster Data:")
-        cluster_label.setMinimumWidth(100)
-        self.cluster_input = QLineEdit()
-        self.cluster_input.setPlaceholderText(
-            "Select Cluster Excel file (CLUSTER sheet)...")
-        cluster_btn = QPushButton("📁 Browse")
-        cluster_btn.clicked.connect(
-            lambda: self.browse_file(self.cluster_input, "Cluster"))
-        cluster_layout.addWidget(cluster_label)
-        cluster_layout.addWidget(self.cluster_input)
-        cluster_layout.addWidget(cluster_btn)
-        layout.addLayout(cluster_layout)
+        self.log("FAC Report Generator initialized. Please select input files.")
 
-        group.setLayout(layout)
-        return group
-
-    def create_output_group(self):
-        """Create output directory group"""
-        group = QGroupBox("Output Directory")
+    def _create_file_input(self, label_text, button_text):
+        """Create a file input row"""
         layout = QHBoxLayout()
 
-        self.output_input = QLineEdit()
-        self.output_input.setPlaceholderText("Select output directory...")
-        output_btn = QPushButton("📂 Browse")
-        output_btn.clicked.connect(self.browse_output)
+        label = QLabel(label_text)
+        label.setMinimumWidth(200)
 
-        layout.addWidget(self.output_input)
-        layout.addWidget(output_btn)
+        line_edit = QLineEdit()
+        line_edit.setPlaceholderText("No file selected")
+        line_edit.setReadOnly(True)
 
-        group.setLayout(layout)
-        return group
+        button = QPushButton(button_text)
+        button.setMinimumWidth(150)
+        button.clicked.connect(lambda: self._browse_file(line_edit))
 
-    def browse_file(self, line_edit, file_type):
-        """Browse for input file"""
+        layout.addWidget(label)
+        layout.addWidget(line_edit)
+        layout.addWidget(button)
+
+        return {"layout": layout, "input": line_edit, "button": button}
+
+    def _create_folder_input(self, label_text, button_text):
+        """Create a folder input row"""
+        layout = QHBoxLayout()
+
+        label = QLabel(label_text)
+        label.setMinimumWidth(200)
+
+        line_edit = QLineEdit()
+        line_edit.setPlaceholderText("No folder selected")
+        line_edit.setReadOnly(True)
+
+        button = QPushButton(button_text)
+        button.setMinimumWidth(150)
+        button.clicked.connect(lambda: self._browse_folder(line_edit))
+
+        layout.addWidget(label)
+        layout.addWidget(line_edit)
+        layout.addWidget(button)
+
+        return {"layout": layout, "input": line_edit, "button": button}
+
+    def _browse_file(self, line_edit):
+        """Browse for a file"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            f"Select {file_type} File",
-            "",
-            "Excel Files (*.xlsx *.xls);;All Files (*)"
+            self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)"
         )
+
         if file_path:
             line_edit.setText(file_path)
-            self.log(f"✓ Selected {file_type} file: {Path(file_path).name}")
+            self.log(f"Selected file: {Path(file_path).name}")
 
-    def browse_output(self):
-        """Browse for output directory"""
-        dir_path = QFileDialog.getExistingDirectory(
-            self,
-            "Select Output Directory"
-        )
-        if dir_path:
-            self.output_input.setText(dir_path)
-            self.log(f"✓ Selected output directory: {dir_path}")
+    def _browse_folder(self, line_edit):
+        """Browse for a folder"""
+        folder_path = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+
+        if folder_path:
+            line_edit.setText(folder_path)
+            self.log(f"Selected output folder: {folder_path}")
 
     def log(self, message):
-        """Add message to log"""
-        self.log_text.append(message)
+        """Add message to log output"""
+        self.log_output.append(message)
+        self.log_output.verticalScrollBar().setValue(
+            self.log_output.verticalScrollBar().maximum()
+        )
 
     def generate_reports(self):
         """Start report generation"""
         # Validate inputs
-        if not self.lte_input.text():
-            QMessageBox.warning(self, "Missing Input",
-                                "Please select LTE data file")
-            return
-        if not self.gsm_input.text():
-            QMessageBox.warning(self, "Missing Input",
-                                "Please select GSM data file")
-            return
-        if not self.cluster_input.text():
-            QMessageBox.warning(self, "Missing Input",
-                                "Please select Cluster data file")
-            return
-        if not self.output_input.text():
-            QMessageBox.warning(self, "Missing Output",
-                                "Please select output directory")
-            return
+        lte_file = self.lte_input["input"].text()
+        gsm_file = self.gsm_input["input"].text()
+        cluster_file = self.cluster_input["input"].text()
+        output_dir = self.output_input["input"].text()
 
-        # Check template exists
-        if not Path(self.TEMPLATE_PATH).exists():
-            QMessageBox.critical(
+        if not all([lte_file, gsm_file, cluster_file, output_dir]):
+            QMessageBox.warning(
                 self,
-                "Template Not Found",
-                f"Template file not found: {self.TEMPLATE_PATH}\n\nPlease ensure datatemplate.xlsx is in the same directory as the application."
+                "Missing Input",
+                "Please select all required input files and output directory.",
             )
             return
+
+        # PERBAIKAN 1: Hardcode template file
+        template_file = "./datatemplate.xlsx"
+
+        # Check if template exists
+        if not Path(template_file).exists():
+            QMessageBox.warning(
+                self,
+                "Template Not Found",
+                f"Template file '{template_file}' not found in current directory.\n"
+                f"Please ensure datatemplate.xlsx exists in the same folder as main.py",
+            )
+            return
+
+        self.log(f"Using template: {template_file}")
 
         # Disable button and show progress
         self.generate_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
-        self.log("\n" + "="*50)
+        self.progress_bar.setRange(0, 0)  # Indeterminate
+
+        self.log("\n" + "=" * 60)
         self.log("Starting report generation...")
+        self.log("=" * 60)
 
-        # Start background processing
-        self.process_thread = ProcessThread(
-            self.lte_input.text(),
-            self.gsm_input.text(),
-            self.cluster_input.text(),
-            self.output_input.text()
+        # Start processing thread
+        self.thread = ProcessThread(
+            lte_file, gsm_file, cluster_file, output_dir, template_file
         )
-        self.process_thread.progress.connect(self.update_progress)
-        self.process_thread.status.connect(self.update_status)
-        self.process_thread.finished.connect(self.process_finished)
-        self.process_thread.start()
+        self.thread.progress.connect(self.log)
+        self.thread.finished.connect(self.on_finished)
+        self.thread.start()
 
-    def update_progress(self, value):
-        """Update progress bar"""
-        self.progress_bar.setValue(value)
-
-    def update_status(self, message):
-        """Update status label"""
-        self.status_label.setText(message)
-        self.log(f"⏳ {message}")
-
-    def process_finished(self, success, message):
-        """Handle process completion"""
+    def on_finished(self, success, message):
+        """Handle processing completion"""
         self.generate_btn.setEnabled(True)
         self.progress_bar.setVisible(False)
 
         if success:
-            self.log(f"✅ {message}")
-            QMessageBox.information(self, "Success", message)
-        else:
-            self.log(f"❌ {message}")
-            QMessageBox.critical(self, "Error", message)
+            self.log("\n" + "=" * 60)
+            self.log("✓ REPORT GENERATION COMPLETE!")
+            self.log(message)
+            self.log("=" * 60)
 
-    def apply_modern_style(self):
-        """Apply modern styling to the application"""
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f5f5;
-            }
-            QGroupBox {
-                font-weight: bold;
-                border: 2px solid #ddd;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-                background-color: white;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-            }
-            QLineEdit {
-                padding: 8px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background-color: white;
-                font-size: 12px;
-            }
-            QLineEdit:focus {
-                border: 2px solid #0078d4;
-            }
-            QPushButton {
-                padding: 8px 16px;
-                border: none;
-                border-radius: 4px;
-                background-color: #0078d4;
-                color: white;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #106ebe;
-            }
-            QProgressBar {
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                text-align: center;
-                height: 25px;
-            }
-            QProgressBar::chunk {
-                background-color: #0078d4;
-                border-radius: 3px;
-            }
-        """)
+            QMessageBox.information(
+                self, "Success", f"Reports generated successfully!\n\n{message}"
+            )
+        else:
+            self.log("\n" + "=" * 60)
+            self.log("✗ REPORT GENERATION FAILED")
+            self.log(f"Error: {message}")
+            self.log("=" * 60)
+
+            QMessageBox.critical(
+                self, "Error", f"Report generation failed:\n\n{message}"
+            )

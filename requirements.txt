@@ -1,6 +1,0 @@
-pandas
-openpyxl
-python-dateutil
-PyQt6
-matplotlib
-numpy

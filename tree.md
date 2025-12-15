@@ -1,26 +1,21 @@
-```bash
-# Create directory structure
-mkdir -p /{config,models,services,ui,utils}
-
-# Create files
-touch main.py
-touch /requirements.txt
-touch /datatemplate.xlsx
-touch /config/__init__.py
-touch /config/band_mapping.json
-touch /config/kpi_config.json
-touch /models/__init__.py
-touch /models/column_enums.py
-touch /services/__init__.py
-touch /services/data_loader.py
-touch /services/data_processor.py
-touch /services/kpi_calculator.py
-touch /services/chart_generator.py
-touch /services/report_generator.py
-touch /ui/__init__.py
-touch /ui/main_window.py
-touch /ui/styles.py
-touch /utils/__init__.py
-touch /utils/helpers.py
-touch /utils/validators.py
-```
+FAC/
+├── main.py # Application entry point
+├── config/ # Configuration files
+│ ├── kpi_config.json # KPI definitions and baselines
+│ └── settings.py # Application settings
+├── data/ # Data loading and transformation
+│ ├── loader.py
+│ └── transformer.py
+├── kpi/ # KPI calculation and validation
+│ ├── calculator.py
+│ └── validator.py
+├── report/ # Report generation
+│ ├── excel_writer.py
+│ ├── chart_generator.py
+│ └── formatter.py
+├── ui/ # User interface
+│ └── main_window.py
+├── utils/ # Utilities
+│ └── helpers.py
+└── assets/ # Logos and assets
+└── logos.py
