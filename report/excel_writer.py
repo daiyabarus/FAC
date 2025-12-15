@@ -34,6 +34,56 @@ class ExcelReportWriter:
         self.xlsmart_logo = xlsmart_logo
         self.zte_logo = zte_logo
 
+    # def write_report(self, cluster):
+    #     """Write report for a specific cluster"""
+    #     print(f"\n=== Writing report for cluster: {cluster} ===")
+
+    #     # Load template
+    #     try:
+    #         wb = load_workbook(self.template_path)
+    #     except:
+    #         # If template doesn't exist, create new workbook
+    #         from openpyxl import Workbook
+
+    #         wb = Workbook()
+    #         wb.remove(wb.active)
+
+    #     # Get cluster validation results
+    #     cluster_results = self.validation_results.get(cluster, {})
+    #     months = sorted(cluster_results.keys())
+
+    #     if len(months) == 0:
+    #         print(f"⚠ No data for cluster {cluster}")
+    #         return
+
+    #     # PERBAIKAN 2: Sort months by date
+    #     month_dates = []
+    #     for month in months:
+    #         try:
+    #             dt = pd.to_datetime(month, format="%b-%y")
+    #             month_dates.append((month, dt))
+    #         except:
+    #             month_dates.append((month, pd.Timestamp("1900-01-01")))
+
+    #     # Sort ascending (September, October, November)
+    #     month_dates.sort(key=lambda x: x[1])
+    #     sorted_months = [m[0] for m in month_dates]
+
+    #     print(f"Months for report (sorted): {sorted_months}")
+
+    #     # Write FAC sheet
+    #     self._write_fac_sheet(wb, cluster, sorted_months, cluster_results)
+
+    #     # Write Contributors sheet
+    #     self._write_contributors_sheet(wb, cluster, sorted_months)
+
+    #     # Write RAW sheets
+    #     self._write_raw_sheets(wb, cluster)
+
+    #     # Save workbook
+    #     output_file = f"{self.output_path}/FAC_Report_{cluster}.xlsx"
+    #     wb.save(output_file)
+    #     print(f"✓ Report saved: {output_file}")
     def write_report(self, cluster):
         """Write report for a specific cluster"""
         print(f"\n=== Writing report for cluster: {cluster} ===")
@@ -41,12 +91,13 @@ class ExcelReportWriter:
         # Load template
         try:
             wb = load_workbook(self.template_path)
-        except:
-            # If template doesn't exist, create new workbook
+            print(f"✓ Template loaded: {self.template_path}")
+        except Exception as e:
+            print(f"⚠ Could not load template: {e}")
             from openpyxl import Workbook
-
             wb = Workbook()
-            wb.remove(wb.active)
+            if 'Sheet' in wb.sheetnames:
+                wb.remove(wb['Sheet'])
 
         # Get cluster validation results
         cluster_results = self.validation_results.get(cluster, {})
@@ -56,36 +107,273 @@ class ExcelReportWriter:
             print(f"⚠ No data for cluster {cluster}")
             return
 
-        # PERBAIKAN 2: Sort months by date
+        # Sort months by date
         month_dates = []
         for month in months:
             try:
-                dt = pd.to_datetime(month, format="%b-%y")
+                dt = pd.to_datetime(month, format='%b-%y')
                 month_dates.append((month, dt))
             except:
-                month_dates.append((month, pd.Timestamp("1900-01-01")))
+                month_dates.append((month, pd.Timestamp('1900-01-01')))
 
-        # Sort ascending (September, October, November)
         month_dates.sort(key=lambda x: x[1])
         sorted_months = [m[0] for m in month_dates]
 
         print(f"Months for report (sorted): {sorted_months}")
 
-        # Write FAC sheet
-        self._write_fac_sheet(wb, cluster, sorted_months, cluster_results)
+        try:
+            # Write FAC sheet
+            self._write_fac_sheet(wb, cluster, sorted_months, cluster_results)
+            print("✓ FAC sheet written")
+        except Exception as e:
+            print(f"✗ Error writing FAC sheet: {e}")
+            import traceback
+            traceback.print_exc()
 
-        # Write Contributors sheet
-        self._write_contributors_sheet(wb, cluster, sorted_months)
+        try:
+            # Write Contributors sheet
+            self._write_contributors_sheet(wb, cluster, sorted_months)
+            print("✓ Contributors sheet written")
+        except Exception as e:
+            print(f"✗ Error writing Contributors sheet: {e}")
+            import traceback
+            traceback.print_exc()
 
-        # Write RAW sheets
-        self._write_raw_sheets(wb, cluster)
+        try:
+            # Write RAW sheets
+            self._write_raw_sheets(wb, cluster)
+            print("✓ RAW sheets written")
+        except Exception as e:
+            print(f"✗ Error writing RAW sheets: {e}")
+            import traceback
+            traceback.print_exc()
 
-        # Save workbook
-        output_file = f"{self.output_path}/FAC_Report_{cluster}.xlsx"
-        wb.save(output_file)
-        print(f"✓ Report saved: {output_file}")
+        try:
+            # TAMBAHAN: Write Charts sheet
+            self._write_charts_sheet(wb, cluster)
+            print("✓ Charts sheet written")
+        except Exception as e:
+            print(f"✗ Error writing Charts sheet: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # Save with better error handling
+        try:
+            output_file = f"{self.output_path}/FAC_Report_{cluster}.xlsx"
+
+            import os
+            if os.path.exists(output_file):
+                os.remove(output_file)
+
+            wb.save(output_file)
+            wb.close()
+
+            print(f"✓ Report saved: {output_file}")
+
+            if os.path.exists(output_file):
+                file_size = os.path.getsize(output_file)
+                print(f"✓ File size: {file_size:,} bytes")
+
+        except Exception as e:
+            print(f"✗ Error saving report: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
+    # TODO: Write Charts Sheet
+    # def _write_charts_sheet(self, wb, cluster):
+    #     """Write Charts sheet with KPI trend charts"""
+    #     from report.chart_generator import ChartGenerator
+    #     from openpyxl.drawing.image import Image as XLImage
+
+    #     print(f"\n=== Generating charts for {cluster} ===")
+
+    #     # Generate charts
+    #     chart_gen = ChartGenerator(
+    #         self.kpi_data, self.transformed_data, cluster)
+    #     charts = chart_gen.generate_all_charts()
+
+    #     if len(charts) == 0:
+    #         print("⚠ No charts generated")
+    #         return
+
+    #     # Create Charts sheet
+    #     if 'Charts' in wb.sheetnames:
+    #         wb.remove(wb['Charts'])
+    #     ws = wb.create_sheet('Charts')
+
+    #     # Write title
+    #     ws['A1'] = f'KPI Trend Charts - {cluster}'
+    #     ws['A1'].font = self.formatter.header_font
+
+    #     # Position charts in grid layout (2 columns)
+    #     current_row = 3
+    #     current_col = 1
+    #     charts_per_row = 2
+    #     chart_height = 30  # rows per chart
+    #     chart_width = 10   # columns per chart
+
+    #     chart_num = 0
+
+    #     for chart_key, chart_base64 in charts.items():
+    #         try:
+    #             # Decode base64 image
+    #             img_data = base64.b64decode(chart_base64)
+    #             img = XLImage(BytesIO(img_data))
+
+    #             # Resize to fit Excel
+    #             img.width = 700
+    #             img.height = 350
+
+    #             # Calculate position
+    #             # A, K, U, etc.
+    #             col_letter = chr(65 + (current_col - 1) * chart_width)
+    #             cell_position = f'{col_letter}{current_row}'
+
+    #             # Add image to sheet
+    #             ws.add_image(img, cell_position)
+
+    #             chart_num += 1
+
+    #             # Move to next position
+    #             current_col += 1
+    #             if current_col > charts_per_row:
+    #                 current_col = 1
+    #                 current_row += chart_height
+
+    #             print(
+    #                 f"✓ Added chart {chart_num}: {chart_key} at {cell_position}")
+
+    #         except Exception as e:
+    #             print(f"⚠ Could not add chart {chart_key}: {e}")
+
+    #     print(f"✓ Written {chart_num} charts to Charts sheet")
+    def _write_charts_sheet(self, wb, cluster):
+        """Write Charts sheet with KPI trend charts"""
+        from report.chart_generator import ChartGenerator
+        from openpyxl.drawing.image import Image as XLImage
+
+        print(f"\n=== Generating charts for {cluster} ===")
+
+        # Generate charts
+        chart_gen = ChartGenerator(
+            self.kpi_data, self.transformed_data, cluster)
+        charts = chart_gen.generate_all_charts()
+
+        if len(charts) == 0:
+            print("⚠ No charts generated")
+            return
+
+        # Create Charts sheet
+        if 'Charts' in wb.sheetnames:
+            wb.remove(wb['Charts'])
+        ws = wb.create_sheet('Charts')
+
+        # Write title
+        ws['A1'] = f'KPI Trend Charts - {cluster}'
+        ws['A1'].font = self.formatter.header_font_small
+
+        # ============================================================
+        # BAGIAN INI YANG PERLU DISESUAIKAN UNTUK POSISI CHART
+        # ============================================================
+
+        current_row = 3
+        current_col = 1
+        charts_per_row = 2
+
+        # UBAH INI: Jarak vertikal antar chart (dalam rows)
+        # Nilai lebih kecil = chart lebih rapat
+        # Coba: 25, 22, 20, dll
+        chart_height = 20  # <--- UBAH INI untuk rapatkan vertikal
+
+        # UBAH INI: Jarak horizontal antar chart (dalam columns)
+        # Nilai lebih besar = chart lebih bergeser ke kanan
+        # Coba: 12, 13, 14, 15, dll
+        chart_width = 13   # <--- UBAH INI untuk geser horizontal
+
+        chart_num = 0
+
+        for chart_key, chart_base64 in charts.items():
+            try:
+                # Decode base64 image
+                img_data = base64.b64decode(chart_base64)
+                img = XLImage(BytesIO(img_data))
+
+                # UBAH INI: Ukuran chart di Excel
+                # Width lebih besar = chart lebih lebar
+                # Height lebih besar = chart lebih tinggi
+                img.width = 700   # <--- UBAH INI untuk lebar chart
+                img.height = 350  # <--- UBAH INI untuk tinggi chart
+
+                # TAMBAHAN: Add border to image
+                # Sayangnya openpyxl tidak support border langsung pada image
+                # Tapi kita bisa add border pada cells di sekitar image
+
+                # Calculate position
+                col_offset = (current_col - 1) * chart_width
+                col_letter = self._get_column_letter(col_offset + 1)
+                cell_position = f'{col_letter}{current_row}'
+
+                # Add image to sheet
+                ws.add_image(img, cell_position)
+
+                # TAMBAHAN: Add border cells around chart (optional visual guide)
+                # Uncomment jika ingin border di sekitar chart
+                # self._add_chart_border(ws, current_row, col_offset + 1, chart_height, chart_width)
+
+                chart_num += 1
+
+                # Move to next position
+                current_col += 1
+                if current_col > charts_per_row:
+                    current_col = 1
+                    current_row += chart_height
+
+                print(
+                    f"✓ Added chart {chart_num}: {chart_key} at {cell_position}")
+
+            except Exception as e:
+                print(f"⚠ Could not add chart {chart_key}: {e}")
+
+        print(f"✓ Written {chart_num} charts to Charts sheet")
+
+    def _get_column_letter(self, col_num):
+        """Convert column number to Excel column letter"""
+        result = ""
+        while col_num > 0:
+            col_num -= 1
+            result = chr(col_num % 26 + 65) + result
+            col_num //= 26
+        return result
+
+    def _add_chart_border(self, ws, start_row, start_col, height, width):
+        """Add border around chart area (optional)"""
+        from openpyxl.styles import Border, Side
+
+        thin_border = Border(
+            left=Side(style='thin', color='CCCCCC'),
+            right=Side(style='thin', color='CCCCCC'),
+            top=Side(style='thin', color='CCCCCC'),
+            bottom=Side(style='thin', color='CCCCCC')
+        )
+
+        # Add border to corner cells only (untuk tidak menutupi chart)
+        # Top-left corner
+        ws.cell(row=start_row, column=start_col).border = thin_border
+
+        # Top-right corner
+        ws.cell(row=start_row, column=start_col +
+                width - 1).border = thin_border
+
+        # Bottom-left corner
+        ws.cell(row=start_row + height - 1,
+                column=start_col).border = thin_border
+
+        # Bottom-right corner
+        ws.cell(row=start_row + height - 1, column=start_col +
+                width - 1).border = thin_border
 
     # TODO: Update 2: Tambahkan Info di Cell A14
+
     def _write_fac_sheet(self, wb, cluster, months, cluster_results):
         """Write FAC/Template sheet"""
         # Get or create sheet

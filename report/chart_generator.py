@@ -1,5 +1,4 @@
 """Chart generation module"""
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -7,14 +6,19 @@ from datetime import datetime
 import numpy as np
 from io import BytesIO
 import base64
+from config.settings import LTEColumns, GSMColumns
 
 
 class ChartGenerator:
     """Generate charts for KPI trends"""
 
-    def __init__(self, kpi_data, cluster):
+    def __init__(self, kpi_data, transformed_data, cluster):
         self.kpi_data = kpi_data
+        self.transformed_data = transformed_data
         self.cluster = cluster
+
+        # Set matplotlib style
+        plt.style.use('seaborn-v0_8-darkgrid')
 
     def generate_all_charts(self):
         """Generate all KPI trend charts"""
@@ -23,88 +27,264 @@ class ChartGenerator:
         charts = {}
 
         # Filter data for cluster
-        lte_data = self.kpi_data["lte"]
-        lte_cluster = lte_data[lte_data["CLUSTER"] == self.cluster].copy()
+        lte_data = self.kpi_data['lte']
+        gsm_data = self.kpi_data['gsm']
 
-        if len(lte_cluster) == 0:
+        lte_cluster = lte_data[lte_data['CLUSTER'] == self.cluster].copy()
+        gsm_cluster = gsm_data[gsm_data['CLUSTER'] == self.cluster].copy()
+
+        if len(lte_cluster) == 0 and len(gsm_cluster) == 0:
             print("⚠ No data for charts")
             return charts
 
-        # Generate charts for key KPIs
-        kpi_list = [
-            ("SESSION_SSR", "Session Setup Success Rate", 99),
-            ("RACH_SR", "RACH Success Rate", 85),
-            ("HO_SR", "Handover Success Rate", 97),
-            ("ERAB_DROP", "E-RAB Drop Rate", 2),
-            ("DL_THP", "Downlink Throughput (Mbps)", 3),
-            ("UL_THP", "Uplink Throughput (Mbps)", 1),
+        # Generate 2G charts
+        gsm_kpis = [
+            ('CSSR', 'Call Setup Success Rate (%)', 98.5, 'higher'),
+            ('SDCCH_SR', 'SDCCH Success Rate (%)', 98.5, 'higher'),
+            ('DROP_RATE', 'Perceive Drop Rate (%)', 2, 'lower'),
         ]
 
-        for kpi_col, kpi_name, baseline in kpi_list:
+        for kpi_col, kpi_name, baseline, direction in gsm_kpis:
             try:
-                chart_img = self._generate_kpi_chart(
-                    lte_cluster, kpi_col, kpi_name, baseline
+                chart_img = self._generate_chart(
+                    # chart_img = self._generate_chart_with_numden(
+                    gsm_cluster,
+                    kpi_col,
+                    kpi_name,
+                    baseline,
+                    '2G RAN',
+                    is_ratio=False
                 )
                 if chart_img:
-                    charts[kpi_col] = chart_img
+                    charts[f'2G_{kpi_col}'] = chart_img
+                    print(f"✓ Generated chart: {kpi_name}")
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
 
-        print(f"✓ Generated {len(charts)} charts")
+        # Generate 4G charts (with num/den aggregation)
+        lte_kpis = [
+            ('SESSION_SSR', 'Session Setup Success Rate (%)', 99, True),
+            ('RACH_SR', 'RACH Success Rate (%)', 85, True),
+            ('HO_SR', 'Handover Success Rate (%)', 97, True),
+            ('ERAB_DROP', 'E-RAB Drop Rate (%)', 2, True),
+            ('DL_THP', 'Downlink User Throughput (Mbps)', 3, True),
+            ('UL_THP', 'Uplink User Throughput (Mbps)', 1, True),
+            ('UL_PLOSS', 'UL Packet Loss (PDCP) (%)', 0.85, False),
+            ('DL_PLOSS', 'DL Packet Loss (PDCP) (%)', 0.10, False),
+            ('CQI', 'CQI', 7, True),
+            ('MIMO_RANK2', 'MIMO Transmission Rank2 Rate (%)', 35, True),
+            ('UL_RSSI', 'UL RSSI (dBm)', -105, True),
+            ('LATENCY', 'Packet Latency (ms)', 30, True),
+            ('LTC_NON_CAP', 'LTC Non Capacity (%)', 3, False),
+            ('OVERLAP_RATE', 'Coverage Overlapping Ratio (%)', 35, False),
+            ('SPECTRAL_EFF', 'Spectral Efficiency (bps/Hz)', 1.1, True),
+            ('VOLTE_CSSR', 'VoLTE Call Success Rate (%)', 97, True),
+            ('VOLTE_DROP', 'VoLTE Call Drop Rate (%)', 2, True),
+            ('SRVCC_SR', 'SRVCC Success Rate (%)', 97, True),
+        ]
+
+        for kpi_col, kpi_name, baseline, is_ratio in lte_kpis:
+            try:
+                chart_img = self._generate_chart(
+                    # chart_img = self._generate_chart_with_numden(
+                    lte_cluster,
+                    kpi_col,
+                    kpi_name,
+                    baseline,
+                    '4G RAN',
+                    is_ratio=is_ratio
+                )
+                if chart_img:
+                    charts[f'4G_{kpi_col}'] = chart_img
+                    print(f"✓ Generated chart: {kpi_name}")
+            except Exception as e:
+                print(f"⚠ Could not generate chart for {kpi_name}: {e}")
+
+        print(f"✓ Generated {len(charts)} charts total")
         return charts
 
-    def _generate_kpi_chart(self, df, kpi_col, kpi_name, baseline):
+    def _generate_chart(self, df, kpi_col, kpi_name, baseline, tech, is_ratio=False):
         """Generate a single KPI trend chart"""
-        # Group by date
-        df_chart = df.copy()
-        df_chart["DATE"] = pd.to_datetime(df_chart.iloc[:, 0])  # BEGIN_TIME
-
-        # Calculate daily average
-        daily_avg = df_chart.groupby("DATE")[kpi_col].mean().reset_index()
-        daily_avg = daily_avg.dropna()
-
-        if len(daily_avg) == 0:
+        if len(df) == 0:
             return None
 
+        # Get BEGIN_TIME column
+        if tech == '2G RAN':
+            time_col = df.columns[GSMColumns.BEGIN_TIME]
+        else:
+            time_col = df.columns[LTEColumns.BEGIN_TIME]
+
+        # Prepare data
+        df_chart = df.copy()
+        df_chart['DATE'] = pd.to_datetime(df_chart[time_col])
+
+        # Group by date and aggregate
+        if is_ratio:
+            # For ratio KPIs, just take average (already calculated)
+            daily_agg = df_chart.groupby('DATE')[kpi_col].mean().reset_index()
+        else:
+            # For non-ratio KPIs, take average
+            daily_agg = df_chart.groupby('DATE')[kpi_col].mean().reset_index()
+
+        daily_agg = daily_agg.dropna()
+
+        if len(daily_agg) == 0:
+            return None
+
+        # Sort by date
+        daily_agg = daily_agg.sort_values('DATE')
+
         # Create figure
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(14, 7))
+        fig.patch.set_edgecolor('black')
+        fig.patch.set_linewidth(2)
 
         # Plot KPI
-        ax.plot(
-            daily_avg["DATE"],
-            daily_avg[kpi_col],
-            marker="o",
-            linewidth=2,
-            markersize=4,
-            label=kpi_name,
-        )
+        ax.plot(daily_agg['DATE'], daily_agg[kpi_col],
+                marker='o', linewidth=2, markersize=5,
+                label=kpi_name, color='#2E86AB', alpha=0.8)
 
-        # Plot baseline
-        ax.axhline(
-            y=baseline,
-            color="r",
-            linestyle="--",
-            linewidth=1.5,
-            label=f"Baseline ({baseline})",
-        )
+        # Plot baseline with dashdot style
+        ax.axhline(y=baseline, color='red', linestyle='dashdot',
+                   linewidth=2, label=f'Baseline ({baseline})', alpha=0.7)
 
         # Formatting
-        ax.set_xlabel("Date", fontsize=12)
-        ax.set_ylabel(kpi_name, fontsize=12)
-        ax.set_title(f"{kpi_name} - {self.cluster}", fontsize=14, fontweight="bold")
-        ax.legend(loc="best")
-        ax.grid(True, alpha=0.3)
+        ax.set_xlabel('Date', fontsize=13, fontweight='bold')
+        ax.set_ylabel(kpi_name, fontsize=13, fontweight='bold')
+        ax.set_title(f'{kpi_name} - {self.cluster} ({tech})',
+                     fontsize=15, fontweight='bold', pad=20)
 
-        # Format x-axis
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%b"))
-        ax.xaxis.set_major_locator(mdates.DayLocator(interval=5))
-        plt.xticks(rotation=45)
+        # Grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+        # Legend
+        ax.legend(loc='best', fontsize=11, framealpha=0.9)
+
+        # Format x-axis dates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b-%y'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(
+            interval=max(1, len(daily_agg)//15)))
+        plt.xticks(rotation=45, ha='right')
+
+        # Add value annotations for key points (first, last, min, max)
+        if len(daily_agg) > 0:
+            # First point
+            first_val = daily_agg.iloc[0][kpi_col]
+            ax.annotate(f'{first_val:.2f}',
+                        xy=(daily_agg.iloc[0]['DATE'], first_val),
+                        xytext=(10, 10), textcoords='offset points',
+                        fontsize=9, alpha=0.7)
+
+            # Last point
+            last_val = daily_agg.iloc[-1][kpi_col]
+            ax.annotate(f'{last_val:.2f}',
+                        xy=(daily_agg.iloc[-1]['DATE'], last_val),
+                        xytext=(10, -15), textcoords='offset points',
+                        fontsize=9, alpha=0.7)
 
         plt.tight_layout()
 
         # Save to BytesIO
         buf = BytesIO()
-        plt.savefig(buf, format="png", dpi=100, bbox_inches="tight")
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight',
+                    facecolor='white', edgecolor='black')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode()
+        plt.close(fig)
+
+        return img_base64
+
+    def _generate_chart_with_numden(self, df, num_col, den_col, kpi_name, baseline, tech):
+        """Generate chart with NUM/DEN aggregation"""
+        if len(df) == 0:
+            return None
+
+        # Get BEGIN_TIME column
+        if tech == '2G RAN':
+            time_col = df.columns[GSMColumns.BEGIN_TIME]
+        else:
+            time_col = df.columns[LTEColumns.BEGIN_TIME]
+
+        # Prepare data
+        df_chart = df.copy()
+        df_chart['DATE'] = pd.to_datetime(df_chart[time_col])
+
+        # Get original column indices
+        if tech == '2G RAN':
+            num_idx = getattr(GSMColumns, num_col)
+            den_idx = getattr(GSMColumns, den_col)
+        else:
+            num_idx = getattr(LTEColumns, num_col)
+            den_idx = getattr(LTEColumns, den_col)
+
+        # Group by date and SUM num/den first
+        daily_agg = df_chart.groupby('DATE').agg({
+            df_chart.columns[num_idx]: 'sum',
+            df_chart.columns[den_idx]: 'sum'
+        }).reset_index()
+
+        # Calculate ratio
+        daily_agg['KPI_VALUE'] = np.where(
+            daily_agg[df_chart.columns[den_idx]] > 0,
+            (daily_agg[df_chart.columns[num_idx]] /
+             daily_agg[df_chart.columns[den_idx]]) * 100,
+            None
+        )
+
+        daily_agg = daily_agg.dropna(subset=['KPI_VALUE'])
+
+        if len(daily_agg) == 0:
+            return None
+
+        # Sort by date
+        daily_agg = daily_agg.sort_values('DATE')
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(14, 7))
+
+        # Plot KPI
+        ax.plot(daily_agg['DATE'], daily_agg['KPI_VALUE'],
+                marker='o', linewidth=2, markersize=5,
+                label=kpi_name, color='#2E86AB', alpha=0.8)
+
+        # Plot baseline with dashdot style
+        ax.axhline(y=baseline, color='red', linestyle='dashdot',
+                   linewidth=2, label=f'Baseline ({baseline})', alpha=0.7)
+
+        # Formatting
+        ax.set_xlabel('Date', fontsize=13, fontweight='bold')
+        ax.set_ylabel(kpi_name, fontsize=13, fontweight='bold')
+        ax.set_title(f'{kpi_name} - {self.cluster} ({tech})',
+                     fontsize=15, fontweight='bold', pad=20)
+
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+        ax.legend(loc='best', fontsize=11, framealpha=0.9)
+
+        # Format x-axis dates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b-%y'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(
+            interval=max(1, len(daily_agg)//15)))
+        plt.xticks(rotation=45, ha='right')
+
+        # Annotations
+        if len(daily_agg) > 0:
+            first_val = daily_agg.iloc[0]['KPI_VALUE']
+            ax.annotate(f'{first_val:.2f}',
+                        xy=(daily_agg.iloc[0]['DATE'], first_val),
+                        xytext=(10, 10), textcoords='offset points',
+                        fontsize=9, alpha=0.7)
+
+            last_val = daily_agg.iloc[-1]['KPI_VALUE']
+            ax.annotate(f'{last_val:.2f}',
+                        xy=(daily_agg.iloc[-1]['DATE'], last_val),
+                        xytext=(10, -15), textcoords='offset points',
+                        fontsize=9, alpha=0.7)
+
+        plt.tight_layout()
+
+        # Save to BytesIO
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode()
         plt.close(fig)
