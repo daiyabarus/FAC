@@ -9,6 +9,8 @@ from datetime import datetime
 from report.formatter import ExcelFormatter
 from utils.helpers import format_month_name, format_date_range, get_three_month_range
 from config.settings import LTEColumns, GSMColumns
+from openpyxl.styles import Alignment
+from utils.helpers import format_date_mdy
 
 
 class ExcelReportWriter:
@@ -83,54 +85,93 @@ class ExcelReportWriter:
         wb.save(output_file)
         print(f"✓ Report saved: {output_file}")
 
+    # TODO: Update 2: Tambahkan Info di Cell A14
     def _write_fac_sheet(self, wb, cluster, months, cluster_results):
         """Write FAC/Template sheet"""
         # Get or create sheet
-        if "Template" in wb.sheetnames:
-            ws = wb["Template"]
-        elif "FAC" in wb.sheetnames:
-            ws = wb["FAC"]
+        if 'Template' in wb.sheetnames:
+            ws = wb['Template']
+        elif 'FAC' in wb.sheetnames:
+            ws = wb['FAC']
         else:
-            ws = wb.create_sheet("FAC")
+            ws = wb.create_sheet('FAC')
 
-        # Add logos
+        # Add logos (with error handling)
         self._add_logos(ws)
 
         # Get date range for title
-        lte_data = self.transformed_data["lte"]
-        cluster_lte = lte_data[lte_data["CLUSTER"] == cluster]
+        lte_data = self.transformed_data['lte']
+        gsm_data = self.transformed_data['gsm']
+        cluster_lte = lte_data[lte_data['CLUSTER'] == cluster]
+        cluster_gsm = gsm_data[gsm_data['CLUSTER'] == cluster]
         dates = pd.to_datetime(
             cluster_lte.iloc[:, LTEColumns.BEGIN_TIME]).unique()
         date_range = get_three_month_range(dates)
 
         # Write title
-        ws["A6"] = f"FAC KPI Achievement {cluster} - {date_range}"
-        ws["A6"].font = self.formatter.header_font
+        ws['A6'] = f"FAC KPI Achievement Summary {cluster} - {date_range}"
+        ws['A6'].font = self.formatter.header_font
 
-        # PERBAIKAN 2: Write month headers (row 12) - already sorted
+        # PERBAIKAN: Tambahkan info di cell A14
+        # Count unique tower IDs
+        unique_towers = cluster_lte['TOWER_ID'].dropna().nunique()
+
+        # Count unique 4G cells
+        unique_4g_cells = cluster_lte.iloc[:,
+                                           LTEColumns.CELL_NAME].dropna().nunique()
+
+        # Count unique 2G cells
+        unique_2g_cells = cluster_gsm.iloc[:,
+                                           GSMColumns.BTS_NAME].dropna().nunique()
+
+        # Get last date (LAST CLUSTER PAC DATE)
+        if len(dates) > 0:
+            last_date = pd.to_datetime(max(dates))
+            last_pac_date = last_date.strftime('%d %B %Y')
+        else:
+            last_pac_date = "N/A"
+
+        # PERBAIKAN MASALAH 2: Jangan merge cell (sudah merged di template A14:A63)
+        # Langsung write ke A14 saja
+        info_text = (
+            f"City name: {cluster}\n"
+            f"Site Number: {unique_towers}\n"
+            f"Cell Number: {unique_4g_cells} 4G & {unique_2g_cells} 2G\n"
+            f"LAST CLUSTER PAC DATE: {last_pac_date}"
+        )
+
+        ws['A14'] = info_text
+        ws['A14'].alignment = Alignment(
+            wrap_text=True, vertical='top', horizontal='left')
+
+        # JANGAN merge - template sudah merge A14:A63
+        # Hapus baris ini: ws.merge_cells('A14:L14')
+
+        # Write month headers (row 12) - already sorted
         for idx, month in enumerate(months[:3]):  # Max 3 months
             col = 13 + (idx * 2)  # M=13, O=15, Q=17 columns
 
             # Convert month format to full name (Sep-25 -> September)
             try:
-                dt = pd.to_datetime(month, format="%b-%y")
-                month_name = dt.strftime("%B")  # Full month name
+                dt = pd.to_datetime(month, format='%b-%y')
+                month_name = dt.strftime('%B')  # Full month name
             except:
                 month_name = month
 
             ws.cell(row=12, column=col).value = month_name
-            ws.cell(row=12, column=col).font = self.formatter.header_font_small
+            ws.cell(row=12, column=col).font = self.formatter.header_font
 
-            print(f"Month {idx + 1} header: {month_name} (column {col})")
+            print(f"Month {idx+1} header: {month_name} (column {col})")
 
         # Write date ranges (row 13)
         for idx, month in enumerate(months[:3]):
             col = 13 + (idx * 2)
-            month_data = cluster_lte[cluster_lte["MONTH"] == month]
+            month_data = cluster_lte[cluster_lte['MONTH'] == month]
             if len(month_data) > 0:
-                dates = pd.to_datetime(
+                dates_month = pd.to_datetime(
                     month_data.iloc[:, LTEColumns.BEGIN_TIME])
-                date_range_str = format_date_range(dates.min(), dates.max())
+                date_range_str = format_date_range(
+                    dates_month.min(), dates_month.max())
                 ws.cell(row=13, column=col).value = date_range_str
 
         # Write KPI results
@@ -140,7 +181,7 @@ class ExcelReportWriter:
         for idx, month in enumerate(months[:3]):
             col = 13 + (idx * 2)
             month_results = cluster_results[month]
-            overall_pass = month_results.get("overall_pass", False)
+            overall_pass = month_results.get('overall_pass', False)
 
             result_cell = ws.cell(row=63, column=col)
             self.formatter.format_pass_fail(result_cell, overall_pass)
@@ -226,27 +267,18 @@ class ExcelReportWriter:
                     self.formatter.format_pass_fail(
                         result_cell, kpi_result["pass"])
 
+    # TODO: Remove Duplicate Method
     def _write_contributors_sheet(self, wb, cluster, months):
         """Write Contributors sheet with cells that failed"""
-        if "Contributors" in wb.sheetnames:
-            ws = wb["Contributors"]
-            # Clear existing data
+        if 'Contributors' in wb.sheetnames:
+            ws = wb['Contributors']
             wb.remove(ws)
 
-        ws = wb.create_sheet("Contributors")
+        ws = wb.create_sheet('Contributors')
 
         # Write headers
-        headers = [
-            "Month",
-            "Clause Type",
-            "Name",
-            "Reference",
-            "TOWER_ID",
-            "CELL_NAME",
-            "Value",
-            "Baseline",
-            "Status",
-        ]
+        headers = ['Month', 'Clause Type', 'Name', 'Reference', 'TOWER_ID',
+                   'CELL_NAME', 'Value', 'Baseline', 'Status']
         for col_idx, header in enumerate(headers, 1):
             self.formatter.format_header_small(
                 ws.cell(row=1, column=col_idx), header)
@@ -254,330 +286,309 @@ class ExcelReportWriter:
         # Collect failed cells
         contributors = []
 
-        lte_data = self.kpi_data["lte"]
-        gsm_data = self.kpi_data["gsm"]
+        lte_data = self.kpi_data['lte']
+        gsm_data = self.kpi_data['gsm']
 
         # Filter by cluster
-        lte_cluster = lte_data[lte_data["CLUSTER"] == cluster]
-        gsm_cluster = gsm_data[gsm_data["CLUSTER"] == cluster]
+        lte_cluster = lte_data[lte_data['CLUSTER'] == cluster]
+        gsm_cluster = gsm_data[gsm_data['CLUSTER'] == cluster]
 
         # Check GSM failures for each month
         for month in months:
-            gsm_month = gsm_cluster[gsm_cluster["MONTH"] == month]
+            gsm_month = gsm_cluster[gsm_cluster['MONTH'] == month]
 
             # CSSR failures
-            cssr_fails = gsm_month[gsm_month["CSSR"] < 98.5]
+            cssr_fails = gsm_month[gsm_month['CSSR'] < 98.5]
             for _, row in cssr_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Accessibility",
-                        "Name": "Call Setup Success Rate",
-                        "Reference": "2G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[GSMColumns.BTS_NAME],
-                        "Value": row["CSSR"],
-                        "Baseline": 98.5,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Accessibility',
+                    'Name': 'Call Setup Success Rate',
+                    'Reference': '2G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[GSMColumns.BTS_NAME],
+                    'Value': row['CSSR'],
+                    'Baseline': 98.5,
+                    'Status': 'FAIL'
+                })
 
             # SDCCH failures
-            sdcch_fails = gsm_month[gsm_month["SDCCH_SR"] < 98.5]
+            sdcch_fails = gsm_month[gsm_month['SDCCH_SR'] < 98.5]
             for _, row in sdcch_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Accessibility",
-                        "Name": "SDCCH Success rate",
-                        "Reference": "2G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[GSMColumns.BTS_NAME],
-                        "Value": row["SDCCH_SR"],
-                        "Baseline": 98.5,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Accessibility',
+                    'Name': 'SDCCH Success rate',
+                    'Reference': '2G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[GSMColumns.BTS_NAME],
+                    'Value': row['SDCCH_SR'],
+                    'Baseline': 98.5,
+                    'Status': 'FAIL'
+                })
 
             # Drop Rate failures
-            drop_fails = gsm_month[gsm_month["DROP_RATE"] >= 2]
+            drop_fails = gsm_month[gsm_month['DROP_RATE'] >= 2]
             for _, row in drop_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Retainability",
-                        "Name": "Perceive Drop Rate",
-                        "Reference": "2G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[GSMColumns.BTS_NAME],
-                        "Value": row["DROP_RATE"],
-                        "Baseline": 2,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Retainability',
+                    'Name': 'Perceive Drop Rate',
+                    'Reference': '2G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[GSMColumns.BTS_NAME],
+                    'Value': row['DROP_RATE'],
+                    'Baseline': 2,
+                    'Status': 'FAIL'
+                })
 
         # Check LTE failures for each month
         for month in months:
-            lte_month = lte_cluster[lte_cluster["MONTH"] == month]
+            lte_month = lte_cluster[lte_cluster['MONTH'] == month]
 
             # Session SSR failures
-            session_fails = lte_month[lte_month["SESSION_SSR"] < 99]
+            session_fails = lte_month[lte_month['SESSION_SSR'] < 99]
             for _, row in session_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Accessibility",
-                        "Name": "Session Setup Success Rate",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["SESSION_SSR"],
-                        "Baseline": 99,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Accessibility',
+                    'Name': 'Session Setup Success Rate',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['SESSION_SSR'],
+                    'Baseline': 99,
+                    'Status': 'FAIL'
+                })
 
             # RACH SR failures (< 85%)
-            rach_fails = lte_month[lte_month["RACH_SR"] < 85]
+            rach_fails = lte_month[lte_month['RACH_SR'] < 85]
             for _, row in rach_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Accessibility",
-                        "Name": "RACH Success Rate (< 85%)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["RACH_SR"],
-                        "Baseline": 85,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Accessibility',
+                    'Name': 'RACH Success Rate (< 85%)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['RACH_SR'],
+                    'Baseline': 85,
+                    'Status': 'FAIL'
+                })
 
             # RACH SR critical failures (< 55%)
-            rach_critical = lte_month[lte_month["RACH_SR"] < 55]
+            rach_critical = lte_month[lte_month['RACH_SR'] < 55]
             for _, row in rach_critical.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Accessibility",
-                        "Name": "RACH Success Rate (< 55%)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["RACH_SR"],
-                        "Baseline": 55,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Accessibility',
+                    'Name': 'RACH Success Rate (< 55%)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['RACH_SR'],
+                    'Baseline': 55,
+                    'Status': 'FAIL'
+                })
 
             # Handover SR failures
-            ho_fails = lte_month[lte_month["HO_SR"] < 97]
+            ho_fails = lte_month[lte_month['HO_SR'] < 97]
             for _, row in ho_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Mobility",
-                        "Name": "Handover Success Rate Inter and Intra-Frequency",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["HO_SR"],
-                        "Baseline": 97,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Mobility',
+                    'Name': 'Handover Success Rate Inter and Intra-Frequency',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['HO_SR'],
+                    'Baseline': 97,
+                    'Status': 'FAIL'
+                })
 
             # E-RAB Drop failures
-            erab_fails = lte_month[lte_month["ERAB_DROP"] >= 2]
+            erab_fails = lte_month[lte_month['ERAB_DROP'] >= 2]
             for _, row in erab_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Retainability",
-                        "Name": "E-RAB Drop Rate",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["ERAB_DROP"],
-                        "Baseline": 2,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Retainability',
+                    'Name': 'E-RAB Drop Rate',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['ERAB_DROP'],
+                    'Baseline': 2,
+                    'Status': 'FAIL'
+                })
 
             # DL Throughput failures (< 3 Mbps)
-            dl_fails = lte_month[lte_month["DL_THP"] < 3]
+            dl_fails = lte_month[lte_month['DL_THP'] < 3]
             for _, row in dl_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "Downlink User Throughput (< 3 Mbps)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["DL_THP"],
-                        "Baseline": 3,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'Downlink User Throughput (< 3 Mbps)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['DL_THP'],
+                    'Baseline': 3,
+                    'Status': 'FAIL'
+                })
 
             # DL Throughput critical failures (< 1 Mbps)
-            dl_critical = lte_month[lte_month["DL_THP"] < 1]
+            dl_critical = lte_month[lte_month['DL_THP'] < 1]
             for _, row in dl_critical.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "Downlink User Throughput (< 1 Mbps)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["DL_THP"],
-                        "Baseline": 1,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'Downlink User Throughput (< 1 Mbps)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['DL_THP'],
+                    'Baseline': 1,
+                    'Status': 'FAIL'
+                })
 
             # UL Throughput failures (< 1 Mbps)
-            ul_fails = lte_month[lte_month["UL_THP"] < 1]
+            ul_fails = lte_month[lte_month['UL_THP'] < 1]
             for _, row in ul_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "Uplink User Throughput (< 1 Mbps)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["UL_THP"],
-                        "Baseline": 1,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'Uplink User Throughput (< 1 Mbps)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['UL_THP'],
+                    'Baseline': 1,
+                    'Status': 'FAIL'
+                })
 
             # UL Throughput critical failures (< 0.256 Mbps)
-            ul_critical = lte_month[lte_month["UL_THP"] < 0.256]
+            ul_critical = lte_month[lte_month['UL_THP'] < 0.256]
             for _, row in ul_critical.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "Uplink User Throughput (< 0.256 Mbps)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["UL_THP"],
-                        "Baseline": 0.256,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'Uplink User Throughput (< 0.256 Mbps)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['UL_THP'],
+                    'Baseline': 0.256,
+                    'Status': 'FAIL'
+                })
 
-            # PERBAIKAN 3: Packet Loss failures - INCLUDE 0 values
             # UL Packet Loss failures (>= 0.85%)
-            ul_ploss_fails = lte_month[lte_month["UL_PLOSS"] >= 0.85]
+            ul_ploss_fails = lte_month[lte_month['UL_PLOSS'] >= 0.85]
             for _, row in ul_ploss_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "UL Packet Loss (PDCP)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["UL_PLOSS"],
-                        "Baseline": 0.85,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'UL Packet Loss (PDCP)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['UL_PLOSS'],
+                    'Baseline': 0.85,
+                    'Status': 'FAIL'
+                })
 
             # DL Packet Loss failures (>= 0.10%)
-            dl_ploss_fails = lte_month[lte_month["DL_PLOSS"] >= 0.10]
+            dl_ploss_fails = lte_month[lte_month['DL_PLOSS'] >= 0.10]
             for _, row in dl_ploss_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "DL Packet Loss (PDCP)",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["DL_PLOSS"],
-                        "Baseline": 0.10,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'DL Packet Loss (PDCP)',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['DL_PLOSS'],
+                    'Baseline': 0.10,
+                    'Status': 'FAIL'
+                })
 
             # CQI failures
-            cqi_fails = lte_month[lte_month["CQI"] < 7]
+            cqi_fails = lte_month[lte_month['CQI'] < 7]
             for _, row in cqi_fails.iterrows():
-                contributors.append(
-                    {
-                        "Month": month,
-                        "Clause Type": "Integrity",
-                        "Name": "CQI",
-                        "Reference": "4G RAN",
-                        "TOWER_ID": row.get("TOWER_ID", ""),
-                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
-                        "Value": row["CQI"],
-                        "Baseline": 7,
-                        "Status": "FAIL",
-                    }
-                )
+                contributors.append({
+                    'Month': month,
+                    'Clause Type': 'Integrity',
+                    'Name': 'CQI',
+                    'Reference': '4G RAN',
+                    'TOWER_ID': row.get('TOWER_ID', ''),
+                    'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
+                    'Value': row['CQI'],
+                    'Baseline': 7,
+                    'Status': 'FAIL'
+                })
 
-            # Add more failure checks as needed...
+        # PERBAIKAN: Convert to DataFrame and remove duplicates
+        if len(contributors) > 0:
+            df_contributors = pd.DataFrame(contributors)
+            # Remove duplicates based on all columns except Value (might vary slightly)
+            df_contributors = df_contributors.drop_duplicates(
+                subset=['Month', 'Clause Type', 'Name', 'Reference',
+                        'TOWER_ID', 'CELL_NAME', 'Baseline'],
+                keep='first'
+            )
+            contributors = df_contributors.to_dict('records')
 
         # Write contributors to sheet
         for row_idx, contrib in enumerate(contributors, 2):
-            ws.cell(row=row_idx, column=1).value = contrib["Month"]
-            ws.cell(row=row_idx, column=2).value = contrib["Clause Type"]
-            ws.cell(row=row_idx, column=3).value = contrib["Name"]
-            ws.cell(row=row_idx, column=4).value = contrib["Reference"]
-            ws.cell(row=row_idx, column=5).value = contrib["TOWER_ID"]
-            ws.cell(row=row_idx, column=6).value = contrib["CELL_NAME"]
+            ws.cell(row=row_idx, column=1).value = contrib['Month']
+            ws.cell(row=row_idx, column=2).value = contrib['Clause Type']
+            ws.cell(row=row_idx, column=3).value = contrib['Name']
+            ws.cell(row=row_idx, column=4).value = contrib['Reference']
+            ws.cell(row=row_idx, column=5).value = contrib['TOWER_ID']
+            ws.cell(row=row_idx, column=6).value = contrib['CELL_NAME']
 
             value_cell = ws.cell(row=row_idx, column=7)
-            self.formatter.format_value(value_cell, contrib["Value"], "0.00")
+            self.formatter.format_value(value_cell, contrib['Value'], '0.00')
 
-            ws.cell(row=row_idx, column=8).value = contrib["Baseline"]
+            ws.cell(row=row_idx, column=8).value = contrib['Baseline']
 
             status_cell = ws.cell(row=row_idx, column=9)
             self.formatter.format_pass_fail(status_cell, False)
 
-        print(f"✓ Written {len(contributors)} contributors")
+        print(
+            f"✓ Written {len(contributors)} contributors (duplicates removed)")
 
     def _write_raw_sheets(self, wb, cluster):
         """Write RAW 2G and RAW 4G sheets"""
+
         # RAW 2G
-        gsm_data = self.kpi_data["gsm"]
-        gsm_cluster = gsm_data[gsm_data["CLUSTER"] == cluster].copy()
+        gsm_data = self.kpi_data['gsm']
+        gsm_cluster = gsm_data[gsm_data['CLUSTER'] == cluster].copy()
 
         if len(gsm_cluster) > 0:
             # Select columns
-            gsm_raw = gsm_cluster[
-                [
-                    gsm_cluster.columns[GSMColumns.BEGIN_TIME],
-                    "TOWER_ID",
-                    gsm_cluster.columns[GSMColumns.BTS_NAME],
-                    "CSSR",
-                    "SDCCH_SR",
-                    "DROP_RATE",
-                ]
-            ].copy()
+            gsm_raw = gsm_cluster[[
+                gsm_cluster.columns[GSMColumns.BEGIN_TIME],
+                'TOWER_ID',
+                gsm_cluster.columns[GSMColumns.BTS_NAME],
+                'CSSR',
+                'SDCCH_SR',
+                'DROP_RATE'
+            ]].copy()
 
-            gsm_raw.columns = [
-                "BEGIN_TIME",
-                "TOWER_ID",
-                "BTS_NAME",
-                "CSSR",
-                "SDCCH_SR",
-                "DROP_RATE",
-            ]
+            gsm_raw.columns = ['BEGIN_TIME', 'TOWER_ID', 'BTS_NAME',
+                               'CSSR', 'SDCCH_SR', 'DROP_RATE']
+
+            # PERBAIKAN: Remove duplicates
+            gsm_raw = gsm_raw.drop_duplicates()
+
+            # PERBAIKAN: Convert BEGIN_TIME to m/d/yyyy format
+            gsm_raw['BEGIN_TIME'] = pd.to_datetime(
+                gsm_raw['BEGIN_TIME']).dt.strftime('%-m/%-d/%Y')
 
             # Write to sheet
-            if "RAW 2G" in wb.sheetnames:
-                wb.remove(wb["RAW 2G"])
-            ws_gsm = wb.create_sheet("RAW 2G")
+            if 'RAW 2G' in wb.sheetnames:
+                wb.remove(wb['RAW 2G'])
+            ws_gsm = wb.create_sheet('RAW 2G')
 
             # Write headers
             for c_idx, col in enumerate(gsm_raw.columns, 1):
@@ -590,72 +601,60 @@ class ExcelReportWriter:
                     cell = ws_gsm.cell(row=r_idx, column=c_idx)
                     cell.value = value
                     if c_idx > 3:  # Numeric columns
-                        cell.number_format = "0.00"
+                        cell.number_format = '0.00'
 
-            print(f"✓ Written RAW 2G: {len(gsm_raw)} records")
+            print(
+                f"✓ Written RAW 2G: {len(gsm_raw)} records (duplicates removed)")
 
         # RAW 4G
-        lte_data = self.kpi_data["lte"]
-        lte_cluster = lte_data[lte_data["CLUSTER"] == cluster].copy()
+        lte_data = self.kpi_data['lte']
+        lte_cluster = lte_data[lte_data['CLUSTER'] == cluster].copy()
 
         if len(lte_cluster) > 0:
             # Select columns
-            lte_raw = lte_cluster[
-                [
-                    lte_cluster.columns[LTEColumns.BEGIN_TIME],
-                    "TOWER_ID",
-                    lte_cluster.columns[LTEColumns.CELL_NAME],
-                    "LTE_BAND",
-                    "SESSION_SSR",
-                    "RACH_SR",
-                    "HO_SR",
-                    "ERAB_DROP",
-                    "DL_THP",
-                    "UL_THP",
-                    "UL_PLOSS",
-                    "DL_PLOSS",
-                    "CQI",
-                    "MIMO_RANK2",
-                    "UL_RSSI",
-                    "LATENCY",
-                    "LTC_NON_CAP",
-                    "OVERLAP_RATE",
-                    "SPECTRAL_EFF",
-                    "VOLTE_CSSR",
-                    "VOLTE_DROP",
-                    "SRVCC_SR",
-                ]
-            ].copy()
+            lte_raw = lte_cluster[[
+                lte_cluster.columns[LTEColumns.BEGIN_TIME],
+                'TOWER_ID',
+                lte_cluster.columns[LTEColumns.CELL_NAME],
+                'LTE_BAND',
+                'SESSION_SSR',
+                'RACH_SR',
+                'HO_SR',
+                'ERAB_DROP',
+                'DL_THP',
+                'UL_THP',
+                'UL_PLOSS',
+                'DL_PLOSS',
+                'CQI',
+                'MIMO_RANK2',
+                'UL_RSSI',
+                'LATENCY',
+                'LTC_NON_CAP',
+                'OVERLAP_RATE',
+                'SPECTRAL_EFF',
+                'VOLTE_CSSR',
+                'VOLTE_DROP',
+                'SRVCC_SR'
+            ]].copy()
 
-            lte_raw.columns = [
-                "BEGIN_TIME",
-                "TOWER_ID",
-                "CELL_NAME",
-                "BAND",
-                "SESSION_SSR",
-                "RACH_SR",
-                "HO_SR",
-                "ERAB_DROP",
-                "DL_THP",
-                "UL_THP",
-                "UL_PLOSS",
-                "DL_PLOSS",
-                "CQI",
-                "MIMO_RANK2",
-                "UL_RSSI",
-                "LATENCY",
-                "LTC_NON_CAP",
-                "OVERLAP_RATE",
-                "SPECTRAL_EFF",
-                "VOLTE_CSSR",
-                "VOLTE_DROP",
-                "SRVCC_SR",
-            ]
+            lte_raw.columns = ['BEGIN_TIME', 'TOWER_ID', 'CELL_NAME', 'BAND',
+                               'SESSION_SSR', 'RACH_SR', 'HO_SR', 'ERAB_DROP',
+                               'DL_THP', 'UL_THP', 'UL_PLOSS', 'DL_PLOSS',
+                               'CQI', 'MIMO_RANK2', 'UL_RSSI', 'LATENCY',
+                               'LTC_NON_CAP', 'OVERLAP_RATE', 'SPECTRAL_EFF',
+                               'VOLTE_CSSR', 'VOLTE_DROP', 'SRVCC_SR']
+
+            # PERBAIKAN: Remove duplicates
+            lte_raw = lte_raw.drop_duplicates()
+
+            # PERBAIKAN: Convert BEGIN_TIME to m/d/yyyy format
+            lte_raw['BEGIN_TIME'] = pd.to_datetime(
+                lte_raw['BEGIN_TIME']).dt.strftime('%-m/%-d/%Y')
 
             # Write to sheet
-            if "RAW 4G" in wb.sheetnames:
-                wb.remove(wb["RAW 4G"])
-            ws_lte = wb.create_sheet("RAW 4G")
+            if 'RAW 4G' in wb.sheetnames:
+                wb.remove(wb['RAW 4G'])
+            ws_lte = wb.create_sheet('RAW 4G')
 
             # Write headers
             for c_idx, col in enumerate(lte_raw.columns, 1):
@@ -668,9 +667,10 @@ class ExcelReportWriter:
                     cell = ws_lte.cell(row=r_idx, column=c_idx)
                     cell.value = value
                     if c_idx > 4:  # Numeric columns
-                        cell.number_format = "0.00"
+                        cell.number_format = '0.00'
 
-            print(f"✓ Written RAW 4G: {len(lte_raw)} records")
+            print(
+                f"✓ Written RAW 4G: {len(lte_raw)} records (duplicates removed)")
 
     def _add_logos(self, ws):
         """Add logos to worksheet"""

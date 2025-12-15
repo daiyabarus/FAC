@@ -58,6 +58,16 @@ def map_frequency_band(freq_band):
         return None
 
 
+# def format_date_mdy(date_str):
+#     """Convert date from YYYY-MM-DD to M/D/YYYY"""
+#     try:
+#         if isinstance(date_str, str):
+#             dt = pd.to_datetime(date_str)
+#         else:
+#             dt = date_str
+#         return dt.strftime("%-m/%-d/%Y")
+#     except:
+#         return None
 def format_date_mdy(date_str):
     """Convert date from YYYY-MM-DD to M/D/YYYY"""
     try:
@@ -65,7 +75,12 @@ def format_date_mdy(date_str):
             dt = pd.to_datetime(date_str)
         else:
             dt = date_str
-        return dt.strftime("%-m/%-d/%Y")
+        # Use strftime without leading zeros
+        # For cross-platform compatibility, use replace instead of %-
+        result = dt.strftime('%m/%d/%Y')
+        # Remove leading zeros
+        parts = result.split('/')
+        return f"{int(parts[0])}/{int(parts[1])}/{parts[2]}"
     except:
         return None
 
