@@ -166,7 +166,7 @@ class ExcelReportWriter:
         current_col = 1
         charts_per_row = 2
         chart_height = 20
-        chart_width = 11.5
+        chart_width = 12
         chart_num = 0
 
         # Add charts to sheet
