@@ -72,10 +72,12 @@ class KPIValidator:
 
         # Filter data
         lte_month = self.lte_kpis[
-            (self.lte_kpis["CLUSTER"] == cluster) & (self.lte_kpis["MONTH"] == month)
+            (self.lte_kpis["CLUSTER"] == cluster) & (
+                self.lte_kpis["MONTH"] == month)
         ]
         gsm_month = self.gsm_kpis[
-            (self.gsm_kpis["CLUSTER"] == cluster) & (self.gsm_kpis["MONTH"] == month)
+            (self.gsm_kpis["CLUSTER"] == cluster) & (
+                self.gsm_kpis["MONTH"] == month)
         ]
 
         # Validate GSM KPIs
@@ -85,7 +87,8 @@ class KPIValidator:
         results["lte"] = self._validate_lte_kpis(lte_month)
 
         # Overall pass/fail
-        all_results = list(results["gsm"].values()) + list(results["lte"].values())
+        all_results = list(results["gsm"].values()) + \
+            list(results["lte"].values())
         results["overall_pass"] = all(
             r.get("pass", False) for r in all_results if r is not None
         )
@@ -341,12 +344,13 @@ class KPIValidator:
         # Overlap Rate
         overlap_vals = df["OVERLAP_RATE"].dropna()
         if len(overlap_vals) > 0:
-            fail_pct = (overlap_vals < 35).sum() / len(overlap_vals) * 100
-            results["overlap_rate"] = {
-                "value": fail_pct,
-                "pass": fail_pct < 80,
-                "target": 80,
-                "baseline": 35,
+            pass_pct = (overlap_vals < 35).sum() / len(overlap_vals) * 100
+            results['overlap_rate'] = {
+                'value': pass_pct,
+                # Pass jika >= 80% cells punya overlap < 35%
+                'pass': pass_pct >= 80,
+                'target': 80,
+                'baseline': 35
             }
 
         # Spectral Efficiency (multiple conditions)
@@ -355,7 +359,8 @@ class KPIValidator:
         # VoLTE CSSR
         volte_cssr_vals = df["VOLTE_CSSR"].dropna()
         if len(volte_cssr_vals) > 0:
-            pass_pct = (volte_cssr_vals > 97).sum() / len(volte_cssr_vals) * 100
+            pass_pct = (volte_cssr_vals > 97).sum() / \
+                len(volte_cssr_vals) * 100
             results["volte_cssr"] = {
                 "value": pass_pct,
                 "pass": pass_pct > 95,

@@ -19,6 +19,7 @@ class ChartGenerator:
 
         # Set matplotlib style
         plt.style.use('seaborn-v0_8-darkgrid')
+    # TODO: update generate_all_charts method
 
     def generate_all_charts(self):
         """Generate all KPI trend charts"""
@@ -47,7 +48,6 @@ class ChartGenerator:
         for kpi_col, kpi_name, baseline, direction in gsm_kpis:
             try:
                 chart_img = self._generate_chart(
-                    # chart_img = self._generate_chart_with_numden(
                     gsm_cluster,
                     kpi_col,
                     kpi_name,
@@ -61,7 +61,7 @@ class ChartGenerator:
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
 
-        # Generate 4G charts (with num/den aggregation)
+        # Generate 4G charts (TANPA Spectral Efficiency dulu)
         lte_kpis = [
             ('SESSION_SSR', 'Session Setup Success Rate (%)', 99, True),
             ('RACH_SR', 'RACH Success Rate (%)', 85, True),
@@ -77,7 +77,7 @@ class ChartGenerator:
             ('LATENCY', 'Packet Latency (ms)', 30, True),
             ('LTC_NON_CAP', 'LTC Non Capacity (%)', 3, False),
             ('OVERLAP_RATE', 'Coverage Overlapping Ratio (%)', 35, False),
-            ('SPECTRAL_EFF', 'Spectral Efficiency (bps/Hz)', 1.1, True),
+            # HAPUS: ('SPECTRAL_EFF', 'Spectral Efficiency (bps/Hz)', 1.1, True),
             ('VOLTE_CSSR', 'VoLTE Call Success Rate (%)', 97, True),
             ('VOLTE_DROP', 'VoLTE Call Drop Rate (%)', 2, True),
             ('SRVCC_SR', 'SRVCC Success Rate (%)', 97, True),
@@ -86,7 +86,6 @@ class ChartGenerator:
         for kpi_col, kpi_name, baseline, is_ratio in lte_kpis:
             try:
                 chart_img = self._generate_chart(
-                    # chart_img = self._generate_chart_with_numden(
                     lte_cluster,
                     kpi_col,
                     kpi_name,
@@ -99,6 +98,34 @@ class ChartGenerator:
                     print(f"✓ Generated chart: {kpi_name}")
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
+
+        # TAMBAHAN: Generate Spectral Efficiency charts per Band/TX combination
+        se_configs = [
+            ('2T2R', 850, 1.1, 'SE 2T2R 850MHz'),
+            ('2T2R', 900, 1.1, 'SE 2T2R 900MHz'),
+            ('2T2R', 2100, 1.3, 'SE 2T2R 2100MHz'),
+            ('2T2R', 1800, 1.25, 'SE 2T2R 1800MHz'),
+            (['4T4R', '8T8R'], 1800, 1.5, 'SE 4T4R/8T8R 1800MHz'),
+            (['4T4R', '8T8R'], [2100, 2300], 1.7, 'SE 4T4R/8T8R 2100/2300MHz'),
+            ('32T32R', 2300, 2.1, 'SE 32T32R 2300MHz'),
+        ]
+
+        for tx_cond, band_cond, baseline, chart_name in se_configs:
+            try:
+                chart_img = self._generate_se_chart(
+                    lte_cluster,
+                    tx_cond,
+                    band_cond,
+                    baseline,
+                    chart_name
+                )
+                if chart_img:
+                    # Create safe key name
+                    safe_name = chart_name.replace(' ', '_').replace('/', '_')
+                    charts[f'4G_SE_{safe_name}'] = chart_img
+                    print(f"✓ Generated chart: {chart_name}")
+            except Exception as e:
+                print(f"⚠ Could not generate chart for {chart_name}: {e}")
 
         print(f"✓ Generated {len(charts)} charts total")
         return charts
@@ -285,6 +312,120 @@ class ChartGenerator:
         # Save to BytesIO
         buf = BytesIO()
         plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode()
+        plt.close(fig)
+
+        return img_base64
+
+    def _generate_se_chart(self, df, tx_cond, band_cond, baseline, chart_name):
+        """Generate Spectral Efficiency chart for specific TX/Band combination"""
+        if len(df) == 0:
+            return None
+
+        # Filter by TX
+        if isinstance(tx_cond, list):
+            mask_tx = df['TX'].isin(tx_cond)
+        else:
+            mask_tx = df['TX'] == tx_cond
+
+        # Filter by Band
+        if isinstance(band_cond, list):
+            mask_band = df['LTE_BAND'].isin(band_cond)
+        else:
+            mask_band = df['LTE_BAND'] == band_cond
+
+        # Apply filters
+        filtered_df = df[mask_tx & mask_band].copy()
+
+        if len(filtered_df) == 0:
+            print(f"⚠ No data for {chart_name}")
+            return None
+
+        # Get BEGIN_TIME column
+        time_col = filtered_df.columns[LTEColumns.BEGIN_TIME]
+
+        # Prepare data
+        filtered_df['DATE'] = pd.to_datetime(filtered_df[time_col])
+
+        # Group by date and average
+        daily_agg = filtered_df.groupby(
+            'DATE')['SPECTRAL_EFF'].mean().reset_index()
+        daily_agg = daily_agg.dropna()
+
+        if len(daily_agg) == 0:
+            return None
+
+        # Sort by date
+        daily_agg = daily_agg.sort_values('DATE')
+
+        # Create figure with border
+        fig, ax = plt.subplots(figsize=(14, 7))
+        fig.patch.set_edgecolor('black')
+        fig.patch.set_linewidth(2)
+
+        # Plot Spectral Efficiency
+        ax.plot(daily_agg['DATE'], daily_agg['SPECTRAL_EFF'],
+                marker='o', linewidth=2, markersize=5,
+                label=f'{chart_name}', color='#2E86AB', alpha=0.8)
+
+        # Plot baseline with dashdot style
+        ax.axhline(y=baseline, color='red', linestyle='dashdot',
+                   linewidth=2, label=f'Baseline ({baseline})', alpha=0.7)
+
+        # Formatting
+        ax.set_xlabel('Date', fontsize=13, fontweight='bold')
+        ax.set_ylabel('Spectral Efficiency (bps/Hz)',
+                      fontsize=13, fontweight='bold')
+
+        # Title with TX and Band info
+        if isinstance(tx_cond, list):
+            tx_str = '/'.join(tx_cond)
+        else:
+            tx_str = tx_cond
+
+        if isinstance(band_cond, list):
+            band_str = '/'.join([str(b) for b in band_cond])
+        else:
+            band_str = str(band_cond)
+
+        ax.set_title(f'Spectral Efficiency - {self.cluster}\n{tx_str} - {band_str}MHz (4G RAN)',
+                     fontsize=15, fontweight='bold', pad=20)
+
+        # Grid
+        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+
+        # Legend
+        ax.legend(loc='best', fontsize=11, framealpha=0.9)
+
+        # Format x-axis dates
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%d-%b-%y'))
+        ax.xaxis.set_major_locator(mdates.DayLocator(
+            interval=max(1, len(daily_agg)//15)))
+        plt.xticks(rotation=45, ha='right')
+
+        # Add value annotations
+        if len(daily_agg) > 0:
+            # First point
+            first_val = daily_agg.iloc[0]['SPECTRAL_EFF']
+            ax.annotate(f'{first_val:.2f}',
+                        xy=(daily_agg.iloc[0]['DATE'], first_val),
+                        xytext=(10, 10), textcoords='offset points',
+                        fontsize=9, alpha=0.7)
+
+            # Last point
+            last_val = daily_agg.iloc[-1]['SPECTRAL_EFF']
+            ax.annotate(f'{last_val:.2f}',
+                        xy=(daily_agg.iloc[-1]['DATE'], last_val),
+                        xytext=(10, -15), textcoords='offset points',
+                        fontsize=9, alpha=0.7)
+
+        plt.tight_layout()
+
+        # Save to BytesIO with border
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=100, bbox_inches='tight',
+                    facecolor='white', edgecolor='black')
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode()
         plt.close(fig)
