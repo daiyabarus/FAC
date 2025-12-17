@@ -12,8 +12,9 @@ class KPIValidator:
     def __init__(self, kpi_data):
         self.lte_kpis = kpi_data["lte"]
         self.gsm_kpis = kpi_data["gsm"]
+        self.ngi = kpi_data.get("ngi") 
 
-        # Load KPI config
+        # Load KPI config (masih dipakai untuk hal lain kalau ada)
         config_path = CONFIG_DIR / "kpi_config.json"
         with open(config_path, "r") as f:
             self.config = json.load(f)
@@ -29,18 +30,15 @@ class KPIValidator:
         gsm_months = sorted(self.gsm_kpis["MONTH"].unique())
         all_months = sorted(list(set(lte_months + gsm_months)))
 
-        # PERBAIKAN 2: Sort months properly by date (ascending - oldest first)
+        # Sort months by real date (Sep-25, dst)
         month_dates = []
         for month in all_months:
             try:
-                # Parse "Sep-25" format to datetime
                 dt = pd.to_datetime(month, format="%b-%y")
                 month_dates.append((month, dt))
-            except:
-                # Fallback if parsing fails
+            except Exception:
                 month_dates.append((month, pd.Timestamp("1900-01-01")))
 
-        # Sort by date (ascending - September, October, November)
         month_dates.sort(key=lambda x: x[1])
         all_months = [m[0] for m in month_dates]
 
@@ -55,9 +53,20 @@ class KPIValidator:
             print(f"\nProcessing cluster: {cluster}")
             cluster_results = {}
 
+            # Per-month GSM/LTE
             for month in all_months:
                 month_results = self._validate_month(cluster, month)
                 cluster_results[month] = month_results
+
+            # NGI (tanpa dimensi month)
+            if self.ngi is not None:
+                print(f"  Validating NGI for cluster: {cluster}")
+                ngi_results = self._validate_ngi_cluster(cluster)
+                if ngi_results:
+                    cluster_results["NGI"] = {"ngi": ngi_results}  # ← wrap dalam dict
+                    print(f"  ✓ NGI validation complete: {len(ngi_results)} rules checked")
+                else:
+                    print(f"  ⚠ No NGI data for cluster: {cluster}")
 
             results[cluster] = cluster_results
 
@@ -84,13 +93,96 @@ class KPIValidator:
         # Validate LTE KPIs
         results["lte"] = self._validate_lte_kpis(lte_month)
 
-        # Overall pass/fail
+        # Overall pass/fail per month (tanpa NGI, karena NGI global)
         all_results = list(results["gsm"].values()) + list(results["lte"].values())
         results["overall_pass"] = all(
             r.get("pass", False) for r in all_results if r is not None
         )
 
         return results
+
+    # ===================== NGI VALIDATION =====================
+
+    def _validate_ngi_cluster(self, cluster):
+        """
+        Validasi RSRP/RSRQ NGI per cluster (tanpa bulan).
+        Rules:
+          CAT = URBAN:
+            - RSRP: 95% cells RSRP >= -105  -> row 58
+            - RSRQ: 45% cells RSRQ >= -12   -> row 60
+          CAT = SUBURBAN:
+            - RSRP: 90% cells RSRP >= -110 -> row 59
+            - RSRQ: 80% cells RSRQ >= -14  -> row 61
+        """
+        if self.ngi is None or len(self.ngi) == 0:
+            return {}
+
+        df = self.ngi[self.ngi["CLUSTER"] == cluster].copy()
+        if len(df) == 0:
+            return {}
+
+        df = df.dropna(subset=["RSRP", "RSRQ", "CAT"])
+        df["CAT"] = df["CAT"].astype(str).str.upper()
+
+        results = {}
+
+        # ----- RSRP URBAN -----
+        df_urban = df[df["CAT"] == "URBAN"]
+        if len(df_urban) > 0:
+            good = df_urban["RSRP"] >= -105
+            pct = good.sum() / len(df_urban) * 100.0
+            results["ngi_rsrp_urban"] = {
+                "value": pct,
+                "pass": pct >= 95.0,
+                "target": 95.0,
+                "baseline": -105,
+                "row": 58,
+                "cat": "URBAN",
+            }
+
+        # ----- RSRP SUBURBAN -----
+        df_sub = df[df["CAT"] == "SUBURBAN"]
+        if len(df_sub) > 0:
+            good = df_sub["RSRP"] >= -110
+            pct = good.sum() / len(df_sub) * 100.0
+            results["ngi_rsrp_suburban"] = {
+                "value": pct,
+                "pass": pct >= 90.0,
+                "target": 90.0,
+                "baseline": -110,
+                "row": 59,
+                "cat": "SUBURBAN",
+            }
+
+        # ----- RSRQ URBAN -----
+        if len(df_urban) > 0:
+            good = df_urban["RSRQ"] >= -12
+            pct = good.sum() / len(df_urban) * 100.0
+            results["ngi_rsrq_urban"] = {
+                "value": pct,
+                "pass": pct >= 45.0,
+                "target": 45.0,
+                "baseline": -12,
+                "row": 60,
+                "cat": "URBAN",
+            }
+
+        # ----- RSRQ SUBURBAN -----
+        if len(df_sub) > 0:
+            good = df_sub["RSRQ"] >= -14
+            pct = good.sum() / len(df_sub) * 100.0
+            results["ngi_rsrq_suburban"] = {
+                "value": pct,
+                "pass": pct >= 80.0,
+                "target": 80.0,
+                "baseline": -14,
+                "row": 61,
+                "cat": "SUBURBAN",
+            }
+
+        return results
+
+    # ===================== EXISTING GSM/LTE VALIDATION =====================
 
     def _validate_gsm_kpis(self, df):
         """Validate GSM KPIs"""
@@ -237,9 +329,8 @@ class KPIValidator:
                 "baseline": 0.256,
             }
 
-        # PERBAIKAN 3: UL Packet Loss - INCLUDE 0 (0 is GOOD!)
+        # UL Packet Loss (0 is good)
         ul_ploss_vals = df["UL_PLOSS"].dropna()
-        # TIDAK exclude 0 - karena 0 berarti packet loss = 0% (BAIK)
         if len(ul_ploss_vals) > 0:
             pass_pct = (ul_ploss_vals < 0.85).sum() / len(ul_ploss_vals) * 100
             results["ul_ploss"] = {
@@ -249,9 +340,8 @@ class KPIValidator:
                 "baseline": 0.85,
             }
 
-        # PERBAIKAN 3: DL Packet Loss - INCLUDE 0 (0 is GOOD!)
+        # DL Packet Loss (0 is good)
         dl_ploss_vals = df["DL_PLOSS"].dropna()
-        # TIDAK exclude 0 - karena 0 berarti packet loss = 0% (BAIK)
         if len(dl_ploss_vals) > 0:
             pass_pct = (dl_ploss_vals < 0.10).sum() / len(dl_ploss_vals) * 100
             results["dl_ploss"] = {
@@ -344,16 +434,14 @@ class KPIValidator:
             pass_pct = (overlap_vals < 35).sum() / len(overlap_vals) * 100
             results["overlap_rate"] = {
                 "value": pass_pct,
-                # Pass jika >= 80% cells punya overlap < 35%
                 "pass": pass_pct >= 80,
                 "target": 80,
                 "baseline": 35,
             }
 
-        # Spectral Efficiency (multiple conditions)
+        # Spectral efficiency, VoLTE, SRVCC tetap pakai fungsi existing
         results.update(self._validate_spectral_efficiency(df))
 
-        # VoLTE CSSR
         volte_cssr_vals = df["VOLTE_CSSR"].dropna()
         if len(volte_cssr_vals) > 0:
             pass_pct = (volte_cssr_vals > 97).sum() / len(volte_cssr_vals) * 100
@@ -392,14 +480,13 @@ class KPIValidator:
         """Validate spectral efficiency with multiple conditions"""
         results = {}
 
-        # FILTER: Only process cells with TX mapping
+        # Hanya cell dengan TX mapping
         df_with_tx = df[df["TX"].notna()].copy()
 
         if len(df_with_tx) == 0:
             print("  No cells with TX mapping for SE validation")
             return results
 
-        # Different baselines based on TX and Band
         se_configs = [
             ("se_850_2t2r", "2T2R", 850, 1.1, 90, 36),
             ("se_900_2t2r", "2T2R", 900, 1.1, 90, 37),
@@ -411,29 +498,27 @@ class KPIValidator:
         ]
 
         for key, tx_cond, band_cond, baseline, target, row_num in se_configs:
-            # Filter by TX
+            # Filter TX
             if isinstance(tx_cond, list):
                 mask_tx = df_with_tx["TX"].isin(tx_cond)
             else:
                 mask_tx = df_with_tx["TX"] == tx_cond
 
-            # Filter by Band
+            # Filter Band
             if isinstance(band_cond, list):
                 mask_band = df_with_tx["LTE_BAND"].isin(band_cond)
             else:
                 mask_band = df_with_tx["LTE_BAND"] == band_cond
 
-            # Apply filters
             filtered = df_with_tx[mask_tx & mask_band]
             se_vals = filtered["SPECTRAL_EFF"].dropna()
 
-            # Only add results if data exists
             if len(se_vals) > 0:
                 pass_pct = (se_vals >= baseline).sum() / len(se_vals) * 100
                 results[key] = {
                     "value": pass_pct,
-                    "pass": pass_pct >= 90,
-                    "target": 90,
+                    "pass": pass_pct >= target,
+                    "target": target,
                     "baseline": baseline,
                     "tx": tx_cond,
                     "band": band_cond,
@@ -441,7 +526,8 @@ class KPIValidator:
                     "cell_count": len(se_vals),
                 }
                 print(
-                    f"  SE {key}: {len(se_vals)} cells, {pass_pct:.2f}% pass (baseline >= {baseline})"
+                    f"  SE {key}: {len(se_vals)} cells, {pass_pct:.2f}% pass "
+                    f"(baseline >= {baseline})"
                 )
             else:
                 print(f"  SE {key}: No data (TX={tx_cond}, Band={band_cond})")

@@ -332,35 +332,39 @@ class ExcelReportWriter:
             result_cell = ws.cell(row=63, column=col)
             self.formatter.format_pass_fail(result_cell, overall_pass)
 
+
     def _write_kpi_results(self, ws, months, cluster_results):
-        """Write KPI results to FAC sheet"""
-        kpi_mapping = self._get_kpi_mapping()
+        kpimapping = self._get_kpi_mapping()
 
         for month_idx, month in enumerate(months):
-            value_col = 13 + (month_idx * 2)
-            result_col = value_col + 1
+            valuecol = 13 + month_idx * 2  # M, O, Q
+            resultcol = valuecol + 1       # N, P, R
+            monthresults = cluster_results[month]
 
-            month_results = cluster_results[month]
-
-            # Process GSM KPIs
             self._write_tech_kpi_results(
-                ws,
-                month_results.get("gsm", {}),
-                kpi_mapping,
-                "gsm",
-                value_col,
-                result_col,
+                ws, monthresults.get("gsm", {}), kpimapping, "gsm", valuecol, resultcol
+            )
+            self._write_tech_kpi_results(
+                ws, monthresults.get("lte", {}), kpimapping, "lte", valuecol, resultcol
             )
 
-            # Process LTE KPIs
-            self._write_tech_kpi_results(
-                ws,
-                month_results.get("lte", {}),
-                kpi_mapping,
-                "lte",
-                value_col,
-                result_col,
-            )
+        # NGI tidak punya dimensi bulan -> tulis sekali di kolom pertama (M & P)
+        ngi_block = cluster_results.get("NGI")
+        if ngi_block and "ngi" in ngi_block:
+            ngi_results = ngi_block["ngi"]
+            valuecol = 13  # kolom M
+            resultcol = 14 # kolom N (tapi status di template Anda di P, bisa disesuaikan kalau M/P adalah merged)
+            # kalau M/P di-merge, tetap tulis ke M dan P, writer ini cuma handle M/N;
+            # bila di template baris 58–61 kolom status adalah P, Anda bisa atur di sini:
+            status_col = 16  # P kolom 16
+
+            for key, kpi in ngi_results.items():
+                row = kpi["row"]
+                value_cell = ws.cell(row=row, column=valuecol)
+                self.formatter.format_value(value_cell, kpi["value"], "0.00")
+
+                status_cell = ws.cell(row=row, column=status_col)
+                self.formatter.format_pass_fail(status_cell, kpi["pass"])
 
     def _get_kpi_mapping(self):
         """Get KPI to row mapping"""
@@ -401,6 +405,10 @@ class ExcelReportWriter:
             ("lte", "volte_cssr"): 45,
             ("lte", "volte_drop"): 46,
             ("lte", "srvcc_sr"): 47,
+            ("ngi", "ngi_rsrp_urban"): 58,
+            ("ngi", "ngi_rsrp_suburban"): 59,
+            ("ngi", "ngi_rsrq_urban"): 60,
+            ("ngi", "ngi_rsrq_suburban"): 61,
         }
 
     def _write_tech_kpi_results(
@@ -408,14 +416,12 @@ class ExcelReportWriter:
     ):
         """Write KPI results for a specific technology"""
         for kpi_key, kpi_result in tech_results.items():
-            # PERBAIKAN: For SE KPIs, get row from result itself
             if kpi_key.startswith("se_"):
                 row = kpi_result.get("row", None)
                 if row is None:
                     print(f"  ⚠ Skipping {kpi_key} - no row mapping")
                     continue
             else:
-                # For non-SE KPIs, use standard mapping
                 row_key = (tech, kpi_key)
                 if row_key not in kpi_mapping:
                     continue
@@ -483,7 +489,8 @@ class ExcelReportWriter:
 
             # Collect LTE failures
             contributors.extend(self._collect_lte_contributors(lte_cluster, month))
-
+        contributors.extend(self.collect_ngi_contributors(cluster))
+        contributors = self._remove_duplicate_contributors(contributors)
         return contributors
 
     def _collect_gsm_contributors(self, gsm_cluster, month):
@@ -520,54 +527,90 @@ class ExcelReportWriter:
 
         return contributors
 
-    # def _collect_lte_contributors(self, lte_cluster, month):
-    #     """Collect LTE failed cells"""
-    #     contributors = []
-    #     lte_month = lte_cluster[lte_cluster['MONTH'] == month]
+    def collect_ngi_contributors(self, cluster):
+        """
+        Cari cell NGI yang FAIL terhadap threshold RSRP/RSRQ.
+        Karena NGI tidak per-bulan, gunakan Month = 'NGI' pada Contributors.
+        """
+        contributors = []
+        ngi = self.transformed_data.get("ngi")
+        if ngi is None or len(ngi) == 0:
+            return contributors
 
-    #     lte_checks = [
-    #         ('SESSION_SSR', 99, '<', 'Accessibility', 'Session Setup Success Rate'),
-    #         ('RACH_SR', 85, '<', 'Accessibility', 'RACH Success Rate (< 85%)'),
-    #         ('RACH_SR', 55, '<', 'Accessibility', 'RACH Success Rate (< 55%)'),
-    #         ('HO_SR', 97, '<', 'Mobility',
-    #          'Handover Success Rate Inter and Intra-Frequency'),
-    #         ('ERAB_DROP', 2, '>=', 'Retainability', 'E-RAB Drop Rate'),
-    #         ('DL_THP', 3, '<', 'Integrity', 'Downlink User Throughput (< 3 Mbps)'),
-    #         ('DL_THP', 1, '<', 'Integrity', 'Downlink User Throughput (< 1 Mbps)'),
-    #         ('UL_THP', 1, '<', 'Integrity', 'Uplink User Throughput (< 1 Mbps)'),
-    #         ('UL_THP', 0.256, '<', 'Integrity',
-    #          'Uplink User Throughput (< 0.256 Mbps)'),
-    #         ('UL_PLOSS', 0.85, '>=', 'Integrity', 'UL Packet Loss (PDCP)'),
-    #         ('DL_PLOSS', 0.10, '>=', 'Integrity', 'DL Packet Loss (PDCP)'),
-    #         ('CQI', 7, '<', 'Integrity', 'CQI')
-    #     ]
+        df = ngi[ngi["CLUSTER"] == cluster].copy()
+        if len(df) == 0:
+            return contributors
 
-    #     for kpi_col, baseline, operator, clause, name in lte_checks:
-    #         if operator == '<':
-    #             fails = lte_month[lte_month[kpi_col] < baseline]
-    #         else:
-    #             fails = lte_month[lte_month[kpi_col] >= baseline]
+        df["CAT"] = df["CAT"].str.upper()
 
-    #         for _, row in fails.iterrows():
-    #             contributors.append({
-    #                 'Month': month,
-    #                 'Clause Type': clause,
-    #                 'Name': name,
-    #                 'Reference': '4G RAN',
-    #                 'TOWER_ID': row.get('TOWER_ID', ''),
-    #                 'CELL_NAME': row.iloc[LTEColumns.CELL_NAME],
-    #                 'Value': row[kpi_col],
-    #                 'Baseline': baseline,
-    #                 'Status': 'FAIL'
-    #             })
+        # RSRP URBAN
+        mask = (df["CAT"] == "URBAN") & (df["RSRP"] < -105)
+        for _, row in df[mask].iterrows():
+            contributors.append({
+                "Month": "NGI",
+                "Clause Type": "Coverage Quality",
+                "Name": "RSRP (Urban)",
+                "Reference": "NGI",
+                "TOWER_ID": row.get("TOWER_ID", ""),  # ← FIX: gunakan TOWER_ID
+                "CELL_NAME": row.get("CELL_NAME", ""),  # ← FIX: gunakan CELL_NAME
+                "Value": row["RSRP"],
+                "Baseline": -105,
+                "Status": "FAIL",
+            })
 
-    #     return contributors
+        # RSRP SUBURBAN
+        mask = (df["CAT"] == "SUBURBAN") & (df["RSRP"] < -110)
+        for _, row in df[mask].iterrows():
+            contributors.append({
+                "Month": "NGI",
+                "Clause Type": "Coverage Quality",
+                "Name": "RSRP (Suburban)",
+                "Reference": "NGI",
+                "TOWER_ID": row.get("TOWER_ID", ""),
+                "CELL_NAME": row.get("CELL_NAME", ""),
+                "Value": row["RSRP"],
+                "Baseline": -110,
+                "Status": "FAIL",
+            })
+
+        # RSRQ URBAN
+        mask = (df["CAT"] == "URBAN") & (df["RSRQ"] < -12)
+        for _, row in df[mask].iterrows():
+            contributors.append({
+                "Month": "NGI",
+                "Clause Type": "Coverage Quality",
+                "Name": "RSRQ (Urban)",
+                "Reference": "NGI",
+                "TOWER_ID": row.get("TOWER_ID", ""),
+                "CELL_NAME": row.get("CELL_NAME", ""),
+                "Value": row["RSRQ"],
+                "Baseline": -12,
+                "Status": "FAIL",
+            })
+
+        # RSRQ SUBURBAN
+        mask = (df["CAT"] == "SUBURBAN") & (df["RSRQ"] < -14)
+        for _, row in df[mask].iterrows():
+            contributors.append({
+                "Month": "NGI",
+                "Clause Type": "Coverage Quality",
+                "Name": "RSRQ (Suburban)",
+                "Reference": "NGI",
+                "TOWER_ID": row.get("TOWER_ID", ""),
+                "CELL_NAME": row.get("CELL_NAME", ""),
+                "Value": row["RSRQ"],
+                "Baseline": -14,
+                "Status": "FAIL",
+            })
+
+        return contributors
+
     def _collect_lte_contributors(self, lte_cluster, month):
         """Collect LTE failed cells"""
         contributors = []
         lte_month = lte_cluster[lte_cluster["MONTH"] == month]
 
-        # ===== STANDARD LTE CHECKS =====
+        # ===== STANDARD LTE CHECKS (tanpa UL_RSSI & OVERLAP_RATE khusus) =====
         lte_checks = [
             ("SESSION_SSR", 99, "<", "Accessibility", "Session Setup Success Rate"),
             ("RACH_SR", 85, "<", "Accessibility", "RACH Success Rate (< 85%)"),
@@ -593,7 +636,7 @@ class ExcelReportWriter:
             ("UL_PLOSS", 0.85, ">=", "Integrity", "UL Packet Loss (PDCP)"),
             ("DL_PLOSS", 0.10, ">=", "Integrity", "DL Packet Loss (PDCP)"),
             ("CQI", 7, "<", "Integrity", "CQI"),
-            # ===== TAMBAHAN: MIMO, RSSI, LATENCY, LTC, OVERLAP =====
+            # ===== TAMBAHAN: MIMO, LATENCY, LTC =====
             (
                 "MIMO_RANK2",
                 35,
@@ -608,11 +651,10 @@ class ExcelReportWriter:
                 "Integrity",
                 "MIMO Transmission Rank2 Rate (< 20%)",
             ),
-            # ('UL_RSSI', -105, '<', 'Integrity', 'UL RSSI (< -105 dBm)'),
             ("LATENCY", 30, ">=", "Integrity", "Packet Latency (>= 30 ms)"),
             ("LATENCY", 40, ">=", "Integrity", "Packet Latency (>= 40 ms)"),
-            ("LTC_NON_CAP", 3, "<", "Utilization", "LTC Non Capacity (< 5%)"),
-            ("OVERLAP_RATE", 35, "<", "Coverage", "Coverage Overlapping Ratio (< 35%)"),
+            ("LTC_NON_CAP", 3, "<", "Utilization", "LTC Non Capacity (<= 5%)"),
+            # OVERLAP_RATE di-handle khusus di bawah
             # ===== TAMBAHAN: VoLTE =====
             ("VOLTE_CSSR", 97, "<", "VoLTE", "VoLTE Call Success Rate"),
             ("VOLTE_DROP", 2, ">=", "VoLTE", "VoLTE Call Drop Rate"),
@@ -643,16 +685,16 @@ class ExcelReportWriter:
                         "Status": "FAIL",
                     }
                 )
-        if "UL_RSSI" in lte_month.columns:
-            # FAIL jika UL_RSSI < -105 (lebih negatif = lebih buruk)
-            rssi_fails = lte_month[lte_month["UL_RSSI"] < -105]
 
+        # ===== KHUSUS UL_RSSI: FAIL jika UL_RSSI > -105 (good <= -105) =====
+        if "UL_RSSI" in lte_month.columns:
+            rssi_fails = lte_month[lte_month["UL_RSSI"] > -105]
             for _, row in rssi_fails.iterrows():
                 contributors.append(
                     {
                         "Month": month,
                         "Clause Type": "Integrity",
-                        "Name": "UL RSSI (< -105 dBm)",  # ✓ NAMA LEBIH JELAS
+                        "Name": "UL RSSI (> -105 dBm)",
                         "Reference": "4G RAN",
                         "TOWER_ID": row.get("TOWER_ID", ""),
                         "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
@@ -661,6 +703,25 @@ class ExcelReportWriter:
                         "Status": "FAIL",
                     }
                 )
+
+        # ===== KHUSUS OVERLAP_RATE: FAIL jika >= 35 (good < 35) =====
+        if "OVERLAP_RATE" in lte_month.columns:
+            ov_fails = lte_month[lte_month["OVERLAP_RATE"] >= 35]
+            for _, row in ov_fails.iterrows():
+                contributors.append(
+                    {
+                        "Month": month,
+                        "Clause Type": "Coverage",
+                        "Name": "Coverage Overlapping Ratio (< 35%)",
+                        "Reference": "4G RAN",
+                        "TOWER_ID": row.get("TOWER_ID", ""),
+                        "CELL_NAME": row.iloc[LTEColumns.CELL_NAME],
+                        "Value": row["OVERLAP_RATE"],
+                        "Baseline": 35,
+                        "Status": "FAIL",
+                    }
+                )
+
         # ===== TAMBAHAN: SPECTRAL EFFICIENCY CHECKS =====
         # SE membutuhkan filter TX dan BAND
         se_checks = [

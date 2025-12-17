@@ -12,6 +12,7 @@ class DataLoader:
         self.lte_data = None
         self.gsm_data = None
         self.cluster_data = None
+        self.ngi = None
 
     def load_lte_file(self, file_path):
         """Load LTE Excel file"""
@@ -20,7 +21,6 @@ class DataLoader:
         try:
             df = pd.read_excel(file_path, sheet_name="Sheet0")
 
-            # Clean numeric columns
             numeric_cols = list(range(19, 61))
 
             for col_idx in numeric_cols:
@@ -42,7 +42,6 @@ class DataLoader:
         try:
             df = pd.read_excel(file_path, sheet_name="Sheet0")
 
-            # Clean numeric columns
             numeric_cols = [13, 14, 15, 16, 17, 18]
 
             for col_idx in numeric_cols:
@@ -72,10 +71,41 @@ class DataLoader:
             print(f"✗ Error loading Cluster file: {e}")
             raise
 
+    def load_ngi_file(self, path: str):
+        """
+        Load NVE Grid / NGI file.
+        Sheet name: 'NVE Grid'
+        """
+        if not path or path.strip() == "":
+            print("⚠ NGI file not provided, skipping...")
+            self.ngi = None
+            return
+
+        print(f"Loading NGI file: {path}")
+        
+        try:
+            df = pd.read_excel(path, sheet_name="NVE Grid")
+
+            df.columns = [str(c).strip() for c in df.columns]
+
+            required = ["Cell Name", "RSRP", "RSRQ"]
+            missing = [c for c in required if c not in df.columns]
+            if missing:
+                raise ValueError(f"NGI file missing columns: {missing}")
+
+            self.ngi = df
+            print(f"✓ Loaded {len(df)} NGI records")
+            return df
+
+        except Exception as e:
+            print(f"✗ Error loading NGI file: {e}")
+            raise
+
     def get_data(self):
         """Return all loaded data"""
         return {
             "lte": self.lte_data,
             "gsm": self.gsm_data,
             "cluster": self.cluster_data,
+            "ngi": self.ngi,
         }

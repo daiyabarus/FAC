@@ -2,17 +2,12 @@
 
 from pathlib import Path
 
-# Paths
 BASE_DIR = Path(__file__).parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 ASSETS_DIR = BASE_DIR / "assets"
 
-# Excel settings
 TEMPLATE_FILE = "datatemplate.xlsx"
-TEMPLATE_SHEET = "Template"
-
-# Column definitions
-
+TEMPLATE_SHEET = "FAC"
 
 class GSMColumns:
     BEGIN_TIME = 0
@@ -106,7 +101,24 @@ class ClusterColumns:
     LTE_CELL = 2
     TX = 3
     SITENAME = 4
+    CAT = 5
 
+class NGIColumns:
+    ENODEB_ID = 0
+    CELL_ID = 1
+    CELL_NAME = 2
+    TOTAL_SAMPLES = 3
+    RSRP = 4
+    RSRQ = 5
+    GOOD_RATIO = 6
+    PBAD_QBAD = 7
+    PBAD_QBAD_PCT = 8
+    PGOOD_QBAD = 9
+    PGOOD_QBAD_PCT = 10
+    PBAD_QGOOD = 11
+    PBAD_QGOOD_PCT = 12
+    PGOOD_QGOOD = 13
+    PGOOD_QGOOD_PCT = 14
 
 # Formatting
 RED_FILL = "FFFFC7CE"

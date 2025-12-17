@@ -13,6 +13,7 @@ class KPICalculator:
     def __init__(self, transformed_data):
         self.lte_data = transformed_data["lte"]
         self.gsm_data = transformed_data["gsm"]
+        self.ngi = transformed_data.get("ngi")
 
         # Load KPI config
         config_path = CONFIG_DIR / "kpi_config.json"
@@ -29,9 +30,11 @@ class KPICalculator:
         self._calculate_gsm_kpis()
         self._calculate_lte_kpis()
 
-        print("✓ KPI calculation complete")
-
-        return {"lte": self.lte_kpis, "gsm": self.gsm_kpis}
+        return {
+            "lte": self.lte_kpis,
+            "gsm": self.gsm_kpis,
+            "ngi": self.ngi
+        }
 
     def _calculate_gsm_kpis(self):
         """Calculate GSM KPIs"""
@@ -66,7 +69,6 @@ class KPICalculator:
         """Calculate LTE KPIs"""
         df = self.lte_data.copy()
 
-        # Session Setup Success Rate
         rrc_ssr = np.where(
             df.iloc[:, LTEColumns.RRC_SSR_DEN] > 0,
             df.iloc[:, LTEColumns.RRC_SSR_NUM] / df.iloc[:, LTEColumns.RRC_SSR_DEN],
