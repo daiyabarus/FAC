@@ -21,18 +21,10 @@ class ExcelFormatter:
         # Header styles
         self.header_fill = PatternFill("solid", fgColor="47402D")
 
-        self.header_font = Font(
-            bold=True,
-            color="ffffff",
-            size=28
-        )
+        self.header_font = Font(bold=True, color="ffffff", size=28)
 
         # ✅ NEW: smaller header font (same color & style)
-        self.header_font_small = Font(
-            bold=True,
-            color="000000",
-            size=16
-        )
+        self.header_font_small = Font(bold=True, color="000000", size=16)
 
         # Border
         self.thin_border = Border(
@@ -43,8 +35,7 @@ class ExcelFormatter:
         )
 
         # Common alignment
-        self.center_alignment = Alignment(
-            horizontal="center", vertical="center")
+        self.center_alignment = Alignment(horizontal="center", vertical="center")
 
     def format_pass_fail(self, cell, is_pass: bool):
         """Format cell as PASS (green) or FAIL (red)"""

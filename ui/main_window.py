@@ -154,9 +154,9 @@ class MainWindow(QMainWindow):
         layout.addSpacing(10)
 
         # PERBAIKAN 1: Hardcode template - no browse button
-        template_info = QLabel("📄 Template: datatemplate.xlsx (hardcoded)")
-        template_info.setStyleSheet("color: #666; font-style: italic; padding: 5px;")
-        layout.addWidget(template_info)
+        # template_info = QLabel("📄 Template: datatemplate.xlsx (hardcoded)")
+        # template_info.setStyleSheet("color: #666; font-style: italic; padding: 5px;")
+        # layout.addWidget(template_info)
 
         # Output directory
         self.output_input = self._create_folder_input(

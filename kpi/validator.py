@@ -72,12 +72,10 @@ class KPIValidator:
 
         # Filter data
         lte_month = self.lte_kpis[
-            (self.lte_kpis["CLUSTER"] == cluster) & (
-                self.lte_kpis["MONTH"] == month)
+            (self.lte_kpis["CLUSTER"] == cluster) & (self.lte_kpis["MONTH"] == month)
         ]
         gsm_month = self.gsm_kpis[
-            (self.gsm_kpis["CLUSTER"] == cluster) & (
-                self.gsm_kpis["MONTH"] == month)
+            (self.gsm_kpis["CLUSTER"] == cluster) & (self.gsm_kpis["MONTH"] == month)
         ]
 
         # Validate GSM KPIs
@@ -87,8 +85,7 @@ class KPIValidator:
         results["lte"] = self._validate_lte_kpis(lte_month)
 
         # Overall pass/fail
-        all_results = list(results["gsm"].values()) + \
-            list(results["lte"].values())
+        all_results = list(results["gsm"].values()) + list(results["lte"].values())
         results["overall_pass"] = all(
             r.get("pass", False) for r in all_results if r is not None
         )
@@ -345,12 +342,12 @@ class KPIValidator:
         overlap_vals = df["OVERLAP_RATE"].dropna()
         if len(overlap_vals) > 0:
             pass_pct = (overlap_vals < 35).sum() / len(overlap_vals) * 100
-            results['overlap_rate'] = {
-                'value': pass_pct,
+            results["overlap_rate"] = {
+                "value": pass_pct,
                 # Pass jika >= 80% cells punya overlap < 35%
-                'pass': pass_pct >= 80,
-                'target': 80,
-                'baseline': 35
+                "pass": pass_pct >= 80,
+                "target": 80,
+                "baseline": 35,
             }
 
         # Spectral Efficiency (multiple conditions)
@@ -359,8 +356,7 @@ class KPIValidator:
         # VoLTE CSSR
         volte_cssr_vals = df["VOLTE_CSSR"].dropna()
         if len(volte_cssr_vals) > 0:
-            pass_pct = (volte_cssr_vals > 97).sum() / \
-                len(volte_cssr_vals) * 100
+            pass_pct = (volte_cssr_vals > 97).sum() / len(volte_cssr_vals) * 100
             results["volte_cssr"] = {
                 "value": pass_pct,
                 "pass": pass_pct > 95,
@@ -396,42 +392,58 @@ class KPIValidator:
         """Validate spectral efficiency with multiple conditions"""
         results = {}
 
+        # FILTER: Only process cells with TX mapping
+        df_with_tx = df[df["TX"].notna()].copy()
+
+        if len(df_with_tx) == 0:
+            print("  No cells with TX mapping for SE validation")
+            return results
+
         # Different baselines based on TX and Band
         se_configs = [
-            ("se_850_2t2r", "2T2R", 850, 1.1),
-            ("se_900_2t2r", "2T2R", 900, 1.1),
-            ("se_2100_2t2r", "2T2R", 2100, 1.3),
-            ("se_1800_2t2r", "2T2R", 1800, 1.25),
-            ("se_1800_4t4r", ["4T4R", "8T8R"], 1800, 1.5),
-            ("se_2100_4t4r", ["4T4R", "8T8R"], [2100, 2300], 1.7),
-            ("se_2300_32t32r", "32T32R", 2300, 2.1),
+            ("se_850_2t2r", "2T2R", 850, 1.1, 90, 36),
+            ("se_900_2t2r", "2T2R", 900, 1.1, 90, 37),
+            ("se_2100_2t2r", "2T2R", 2100, 1.3, 90, 38),
+            ("se_1800_2t2r", "2T2R", 1800, 1.25, 90, 39),
+            ("se_1800_4t4r", ["4T4R", "8T8R"], 1800, 1.5, 90, 40),
+            ("se_2100_4t4r", ["4T4R", "8T8R"], 2100, 1.7, 90, 41),
+            ("se_2300_32t32r", "32T32R", 2300, 2.1, 90, 43),
         ]
 
-        for key, tx_cond, band_cond, baseline in se_configs:
+        for key, tx_cond, band_cond, baseline, target, row_num in se_configs:
             # Filter by TX
             if isinstance(tx_cond, list):
-                mask_tx = df["TX"].isin(tx_cond)
+                mask_tx = df_with_tx["TX"].isin(tx_cond)
             else:
-                mask_tx = df["TX"] == tx_cond
+                mask_tx = df_with_tx["TX"] == tx_cond
 
             # Filter by Band
             if isinstance(band_cond, list):
-                mask_band = df["LTE_BAND"].isin(band_cond)
+                mask_band = df_with_tx["LTE_BAND"].isin(band_cond)
             else:
-                mask_band = df["LTE_BAND"] == band_cond
+                mask_band = df_with_tx["LTE_BAND"] == band_cond
 
-            filtered = df[mask_tx & mask_band]
+            # Apply filters
+            filtered = df_with_tx[mask_tx & mask_band]
             se_vals = filtered["SPECTRAL_EFF"].dropna()
 
+            # Only add results if data exists
             if len(se_vals) > 0:
                 pass_pct = (se_vals >= baseline).sum() / len(se_vals) * 100
                 results[key] = {
                     "value": pass_pct,
-                    "pass": pass_pct > 90,
+                    "pass": pass_pct >= 90,
                     "target": 90,
                     "baseline": baseline,
                     "tx": tx_cond,
                     "band": band_cond,
+                    "row": row_num,
+                    "cell_count": len(se_vals),
                 }
+                print(
+                    f"  SE {key}: {len(se_vals)} cells, {pass_pct:.2f}% pass (baseline >= {baseline})"
+                )
+            else:
+                print(f"  SE {key}: No data (TX={tx_cond}, Band={band_cond})")
 
         return results
