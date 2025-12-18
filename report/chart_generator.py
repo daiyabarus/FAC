@@ -399,10 +399,7 @@ class ChartGenerator:
             mdates.DayLocator(interval=max(1, len(daily_agg) // 15))
         )
         plt.xticks(rotation=45, ha="right")
-
-        # Add value annotations
         if len(daily_agg) > 0:
-            # First point
             first_val = daily_agg.iloc[0]["SPECTRAL_EFF"]
             ax.annotate(
                 f"{first_val:.2f}",
@@ -412,8 +409,6 @@ class ChartGenerator:
                 fontsize=9,
                 alpha=0.7,
             )
-
-            # Last point
             last_val = daily_agg.iloc[-1]["SPECTRAL_EFF"]
             ax.annotate(
                 f"{last_val:.2f}",
@@ -425,8 +420,6 @@ class ChartGenerator:
             )
 
         plt.tight_layout()
-
-        # Save to BytesIO with border
         buf = BytesIO()
         plt.savefig(
             buf,

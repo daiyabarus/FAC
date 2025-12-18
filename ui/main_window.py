@@ -45,7 +45,7 @@ class ProcessThread(QThread):
             from kpi.calculator import KPICalculator
             from kpi.validator import KPIValidator
             from report.excel_writer import ExcelReportWriter
-            from assets.logos import get_xlsmart_logo, get_zte_logo, get_app_logo
+            from assets.logos import get_xlsmart_logo, get_zte_logo
 
             self.progress.emit("Loading data...")
             loader = DataLoader()
@@ -104,25 +104,21 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("FAC-GR")
         self.setGeometry(100, 100, 800, 650)
-
-        # === SET WINDOW ICON DARI get_app_logo() ===
         try:
             from assets.logos import get_app_logo
 
             logo_base64 = get_app_logo()
             if logo_base64:
-                # Decode base64 → QByteArray → QImage → QPixmap → QIcon
                 image_data = base64.b64decode(logo_base64)
                 byte_array = QByteArray(image_data)
                 buffer = QBuffer(byte_array)
                 buffer.open(QBuffer.OpenModeFlag.ReadOnly)
 
                 image = QImage()
-                if image.load(buffer, "PNG"):  # asumsi format PNG, bisa diganti jika berbeda
+                if image.load(buffer, "PNG"):
                     pixmap = QPixmap.fromImage(image)
                     self.setWindowIcon(QIcon(pixmap))
         except Exception as e:
-            # Jika gagal (misal file tidak ada atau base64 rusak), fallback ke icon default
             print(f"Warning: Could not load app logo: {e}")
 
         QToolTip.setFont(QFont("Segoe UI", 10))
@@ -210,7 +206,6 @@ class MainWindow(QMainWindow):
             tooltip="GSM Data File (.xlsx)\nUse the FAC GSM Template from Performance Management UME",
             is_output=False,
         )
-        # === BARIS BARU: NGI ===
         self.ngi_layout, self.ngi_input = self.create_input_row(
             icon_path="assets/ngi.png",
             tooltip="NGI Data File (.xlsx)\nFeature coming soon — will be used in future updates",
@@ -229,7 +224,7 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(self.lte_layout)
         main_layout.addLayout(self.gsm_layout)
-        main_layout.addLayout(self.ngi_layout)  # ← Baris baru
+        main_layout.addLayout(self.ngi_layout)
         main_layout.addLayout(self.cluster_layout)
         main_layout.addLayout(self.output_layout)
 
@@ -253,8 +248,6 @@ class MainWindow(QMainWindow):
         self.log_output.setReadOnly(True)
         self.log_output.setMinimumHeight(160)
         main_layout.addWidget(self.log_output, 1)
-
-        # === RICH HTML TUTORIAL WITH SMALL ICONS (updated with NGI) ===
         icon_size = 16
         self.log("<b>FAC Report Generator — Quick Guide</b><br><br>")
 
@@ -326,7 +319,6 @@ class MainWindow(QMainWindow):
         line_edit.setReadOnly(True)
         line_edit.setToolTip(tooltip)
 
-        # Transparent browse button (icon only)
         browse_btn = QPushButton()
         browse_btn.setObjectName("BrowseButton")
         browse_btn.setFixedSize(40, 40)
@@ -376,7 +368,7 @@ class MainWindow(QMainWindow):
     def generate_reports(self):
         lte = self.lte_input.text()
         gsm = self.gsm_input.text()
-        ngi = self.ngi_input.text()  # ← Bisa dipakai nanti
+        ngi = self.ngi_input.text()
         cluster = self.cluster_input.text()
         output = self.output_input.text()
 
