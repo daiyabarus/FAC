@@ -9,6 +9,7 @@ ASSETS_DIR = BASE_DIR / "assets"
 TEMPLATE_FILE = "datatemplate.xlsx"
 TEMPLATE_SHEET = "FAC"
 
+
 class GSMColumns:
     BEGIN_TIME = 0
     END_TIME = 1
@@ -101,9 +102,11 @@ class ClusterColumns:
     LTE_CELL = 2
     TX = 3
     SITENAME = 4
-    CAT = 5
+    CAT = 5  # ✅ ADDED
+
 
 class NGIColumns:
+    """NGI (NVE Grid) file columns - RAW FORMAT"""
     ENODEB_ID = 0
     CELL_ID = 1
     CELL_NAME = 2
@@ -119,6 +122,7 @@ class NGIColumns:
     PBAD_QGOOD_PCT = 12
     PGOOD_QGOOD = 13
     PGOOD_QGOOD_PCT = 14
+
 
 # Formatting
 RED_FILL = "FFFFC7CE"

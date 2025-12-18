@@ -30,11 +30,7 @@ class KPICalculator:
         self._calculate_gsm_kpis()
         self._calculate_lte_kpis()
 
-        return {
-            "lte": self.lte_kpis,
-            "gsm": self.gsm_kpis,
-            "ngi": self.ngi
-        }
+        return {"lte": self.lte_kpis, "gsm": self.gsm_kpis, "ngi": self.ngi}
 
     def _calculate_gsm_kpis(self):
         """Calculate GSM KPIs"""

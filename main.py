@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QApplication
 from ui.main_window import MainWindow
 from PyQt6.QtGui import QFont
 
+
 def main():
     """Main application entry point"""
     app = QApplication(sys.argv)

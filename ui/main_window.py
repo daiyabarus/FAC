@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+import base64
 
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -18,15 +19,17 @@ from PyQt6.QtWidgets import (
     QApplication,
     QToolTip,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap, QIcon
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QByteArray, QBuffer
+from PyQt6.QtGui import QFont, QPixmap, QIcon, QImage
 
 
 class ProcessThread(QThread):
     progress = pyqtSignal(str)
     finished = pyqtSignal(bool, str)
 
-    def __init__(self, lte_file, gsm_file, ngi_file, cluster_file, output_dir, template_file):
+    def __init__(
+        self, lte_file, gsm_file, ngi_file, cluster_file, output_dir, template_file
+    ):
         super().__init__()
         self.lte_file = lte_file
         self.gsm_file = gsm_file
@@ -42,7 +45,7 @@ class ProcessThread(QThread):
             from kpi.calculator import KPICalculator
             from kpi.validator import KPIValidator
             from report.excel_writer import ExcelReportWriter
-            from assets.logos import get_xlsmart_logo, get_zte_logo
+            from assets.logos import get_xlsmart_logo, get_zte_logo, get_app_logo
 
             self.progress.emit("Loading data...")
             loader = DataLoader()
@@ -54,9 +57,12 @@ class ProcessThread(QThread):
             self.progress.emit("Transforming data...")
             transformer = DataTransformer(loader)
             transformed_data = transformer.transform_all()
-            self.progress.emit(f"DEBUG: NGI data = {transformed_data.get('ngi') is not None}")
-            if transformed_data.get('ngi') is not None:
-                self.progress.emit(f"DEBUG: NGI rows = {len(transformed_data['ngi'])}")
+            self.progress.emit(
+                f"DEBUG: NGI data = {transformed_data.get('ngi') is not None}"
+            )
+            if transformed_data.get("ngi") is not None:
+                self.progress.emit(
+                    f"DEBUG: NGI rows = {len(transformed_data['ngi'])}")
 
             self.progress.emit("Calculating KPIs...")
             calculator = KPICalculator(transformed_data)
@@ -86,6 +92,7 @@ class ProcessThread(QThread):
 
         except Exception as e:
             import traceback
+
             error_detail = traceback.format_exc()
             self.progress.emit(f"✗ {str(e)}")
             self.progress.emit(error_detail)
@@ -96,7 +103,27 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FAC-GR")
-        self.setGeometry(100, 100, 800, 650)  # Sedikit lebih tinggi untuk 5 input
+        self.setGeometry(100, 100, 800, 650)
+
+        # === SET WINDOW ICON DARI get_app_logo() ===
+        try:
+            from assets.logos import get_app_logo
+
+            logo_base64 = get_app_logo()
+            if logo_base64:
+                # Decode base64 → QByteArray → QImage → QPixmap → QIcon
+                image_data = base64.b64decode(logo_base64)
+                byte_array = QByteArray(image_data)
+                buffer = QBuffer(byte_array)
+                buffer.open(QBuffer.OpenModeFlag.ReadOnly)
+
+                image = QImage()
+                if image.load(buffer, "PNG"):  # asumsi format PNG, bisa diganti jika berbeda
+                    pixmap = QPixmap.fromImage(image)
+                    self.setWindowIcon(QIcon(pixmap))
+        except Exception as e:
+            # Jika gagal (misal file tidak ada atau base64 rusak), fallback ke icon default
+            print(f"Warning: Could not load app logo: {e}")
 
         QToolTip.setFont(QFont("Segoe UI", 10))
         self.setStyleSheet("""
@@ -176,33 +203,33 @@ class MainWindow(QMainWindow):
         self.lte_layout, self.lte_input = self.create_input_row(
             icon_path="assets/lte.png",
             tooltip="LTE Data File (.xlsx)\nUse the FAC LTE Template from Performance Management UME",
-            is_output=False
+            is_output=False,
         )
         self.gsm_layout, self.gsm_input = self.create_input_row(
             icon_path="assets/gsm.png",
             tooltip="GSM Data File (.xlsx)\nUse the FAC GSM Template from Performance Management UME",
-            is_output=False
+            is_output=False,
         )
         # === BARIS BARU: NGI ===
         self.ngi_layout, self.ngi_input = self.create_input_row(
             icon_path="assets/ngi.png",
             tooltip="NGI Data File (.xlsx)\nFeature coming soon — will be used in future updates",
-            is_output=False
+            is_output=False,
         )
         self.cluster_layout, self.cluster_input = self.create_input_row(
             icon_path="assets/cluster.png",
             tooltip="Cluster Mapping File (.xlsx)\nMust contain columns: CLUSTER | TOWERID | CELLNAME | TXRX | 2G SITENAME | CAT",
-            is_output=False
+            is_output=False,
         )
         self.output_layout, self.output_input = self.create_input_row(
             icon_path="assets/output.png",
             tooltip="Output Directory\nChoose where the generated FAC reports will be saved",
-            is_output=True
+            is_output=True,
         )
 
         main_layout.addLayout(self.lte_layout)
         main_layout.addLayout(self.gsm_layout)
-        main_layout.addLayout(self.ngi_layout)      # ← Baris baru
+        main_layout.addLayout(self.ngi_layout)  # ← Baris baru
         main_layout.addLayout(self.cluster_layout)
         main_layout.addLayout(self.output_layout)
 
@@ -212,7 +239,8 @@ class MainWindow(QMainWindow):
         self.generate_btn.setMinimumHeight(44)
         self.generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.generate_btn.clicked.connect(self.generate_reports)
-        self.generate_btn.setToolTip("Start generating FAC reports for all clusters")
+        self.generate_btn.setToolTip(
+            "Start generating FAC reports for all clusters")
         main_layout.addWidget(self.generate_btn)
 
         self.progress_bar = QProgressBar()
@@ -230,24 +258,34 @@ class MainWindow(QMainWindow):
         icon_size = 16
         self.log("<b>FAC Report Generator — Quick Guide</b><br><br>")
 
-        self.log(f"<img src='assets/lte.png' width='{icon_size}' height='{icon_size}'> "
-                 "<b>LTE File:</b> Use the official FAC LTE Template<br>"
-                 "  from Performance Management UME<br><br>")
+        self.log(
+            f"<img src='assets/lte.png' width='{icon_size}' height='{icon_size}'> "
+            "<b>LTE File:</b> Use the official FAC LTE Template<br>"
+            "  from Performance Management UME<br><br>"
+        )
 
-        self.log(f"<img src='assets/gsm.png' width='{icon_size}' height='{icon_size}'> "
-                 "<b>GSM File:</b> Use the official FAC GSM Template<br>"
-                 "  from Performance Management UME<br><br>")
+        self.log(
+            f"<img src='assets/gsm.png' width='{icon_size}' height='{icon_size}'> "
+            "<b>GSM File:</b> Use the official FAC GSM Template<br>"
+            "  from Performance Management UME<br><br>"
+        )
 
-        self.log(f"<img src='assets/ngi.png' width='{icon_size}' height='{icon_size}'> "
-                 "<b>NGI File:</b> NGI data input<br>"
-                 "  (Feature coming soon)<br><br>")
+        self.log(
+            f"<img src='assets/ngi.png' width='{icon_size}' height='{icon_size}'> "
+            "<b>NGI File:</b> NGI data input<br>"
+            "  (Feature coming soon)<br><br>"
+        )
 
-        self.log(f"<img src='assets/cluster.png' width='{icon_size}' height='{icon_size}'> "
-                 "<b>Cluster Mapping File:</b> Must contain these columns:<br>"
-                 "  CLUSTER | TOWERID | CELLNAME | TXRX | 2G SITENAME<br><br>")
+        self.log(
+            f"<img src='assets/cluster.png' width='{icon_size}' height='{icon_size}'> "
+            "<b>Cluster Mapping File:</b> Must contain these columns:<br>"
+            "  CLUSTER | TOWERID | CELLNAME | TXRX | 2G SITENAME<br><br>"
+        )
 
-        self.log(f"<img src='assets/output.png' width='{icon_size}' height='{icon_size}'> "
-                 "<b>Output Directory:</b> Choose where reports will be saved<br><br>")
+        self.log(
+            f"<img src='assets/output.png' width='{icon_size}' height='{icon_size}'> "
+            "<b>Output Directory:</b> Choose where reports will be saved<br><br>"
+        )
 
         self.log("Hover over icons for more details • Ready to generate!")
 
@@ -261,10 +299,25 @@ class MainWindow(QMainWindow):
         label.setToolTip(tooltip)
 
         if Path(icon_path).exists():
-            pixmap = QPixmap(icon_path).scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            pixmap = QPixmap(icon_path).scaled(
+                32,
+                32,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
             label.setPixmap(pixmap)
         else:
-            fallback = "📊" if "LTE" in tooltip else "📡" if "GSM" in tooltip else "🔧" if "NGI" in tooltip else "🌐" if "Cluster" in tooltip else "📂"
+            fallback = (
+                "📊"
+                if "LTE" in tooltip
+                else "📡"
+                if "GSM" in tooltip
+                else "🔧"
+                if "NGI" in tooltip
+                else "🌐"
+                if "Cluster" in tooltip
+                else "📂"
+            )
             label.setText(fallback)
             label.setFont(QFont("Segoe UI Emoji", 20))
 
@@ -282,7 +335,12 @@ class MainWindow(QMainWindow):
 
         browse_icon_path = "assets/search.png"
         if Path(browse_icon_path).exists():
-            browse_pixmap = QPixmap(browse_icon_path).scaled(28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            browse_pixmap = QPixmap(browse_icon_path).scaled(
+                28,
+                28,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
             browse_btn.setIcon(QIcon(browse_pixmap))
             browse_btn.setIconSize(browse_pixmap.size())
         else:
@@ -302,7 +360,8 @@ class MainWindow(QMainWindow):
 
     def browse(self, line_edit: QLineEdit, is_folder: bool = False):
         if is_folder:
-            path = QFileDialog.getExistingDirectory(self, "Select Output Folder")
+            path = QFileDialog.getExistingDirectory(
+                self, "Select Output Folder")
         else:
             path, _ = QFileDialog.getOpenFileName(
                 self, "Select Excel File", "", "Excel Files (*.xlsx *.xls)"
@@ -310,23 +369,30 @@ class MainWindow(QMainWindow):
 
         if path:
             line_edit.setText(path)
-            name = Path(path).name if not is_folder else Path(path).name or path
+            name = Path(path).name if not is_folder else Path(
+                path).name or path
             self.log(f"✓ Selected: <b>{name}</b>")
 
     def generate_reports(self):
         lte = self.lte_input.text()
         gsm = self.gsm_input.text()
-        ngi = self.ngi_input.text()          # ← Bisa dipakai nanti
+        ngi = self.ngi_input.text()  # ← Bisa dipakai nanti
         cluster = self.cluster_input.text()
         output = self.output_input.text()
 
         if not all([lte, gsm, cluster, output]):
-            QMessageBox.warning(self, "", "Please select all required files and output folder\n(NGI is optional for now)")
+            QMessageBox.warning(
+                self,
+                "",
+                "Please select all required files and output folder\n(NGI is optional for now)",
+            )
             return
 
         template_file = "./datatemplate.xlsx"
         if not Path(template_file).exists():
-            QMessageBox.critical(self, "", "datatemplate.xlsx not found in project root")
+            QMessageBox.critical(
+                self, "", "datatemplate.xlsx not found in project root"
+            )
             return
 
         self.generate_btn.setEnabled(False)
@@ -335,7 +401,8 @@ class MainWindow(QMainWindow):
 
         self.log("<br><b>Starting report generation...</b><br>")
 
-        self.thread = ProcessThread(lte, gsm, ngi, cluster, output, template_file)
+        self.thread = ProcessThread(
+            lte, gsm, ngi, cluster, output, template_file)
         self.thread.progress.connect(self.log)
         self.thread.finished.connect(self.on_finished)
         self.thread.start()
@@ -345,11 +412,15 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
 
         if success:
-            self.log("<br><span style='color:#06b6d4; font-weight:bold;'>✓ Complete!</span><br>")
+            self.log(
+                "<br><span style='color:#06b6d4; font-weight:bold;'>✓ Complete!</span><br>"
+            )
             self.log(message)
             QMessageBox.information(self, "", f"{message}")
         else:
-            self.log("<br><span style='color:#ef4444; font-weight:bold;'>✗ Failed</span><br>")
+            self.log(
+                "<br><span style='color:#ef4444; font-weight:bold;'>✗ Failed</span><br>"
+            )
             self.log(message)
             QMessageBox.critical(self, "", "Report generation failed")
 
