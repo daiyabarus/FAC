@@ -17,11 +17,7 @@ class ChartGenerator:
         self.kpi_data = kpi_data
         self.transformed_data = transformed_data
         self.cluster = cluster
-
-        # Set matplotlib style
         plt.style.use("seaborn-v0_8-darkgrid")
-
-    # TODO: update generate_all_charts method
 
     def generate_all_charts(self):
         """Generate all KPI trend charts"""
@@ -29,7 +25,6 @@ class ChartGenerator:
 
         charts = {}
 
-        # Filter data for cluster
         lte_data = self.kpi_data["lte"]
         gsm_data = self.kpi_data["gsm"]
 
@@ -40,7 +35,6 @@ class ChartGenerator:
             print("⚠ No data for charts")
             return charts
 
-        # Generate 2G charts
         gsm_kpis = [
             ("CSSR", "Call Setup Success Rate (%)", 98.5, "higher"),
             ("SDCCH_SR", "SDCCH Success Rate (%)", 98.5, "higher"),
@@ -58,8 +52,7 @@ class ChartGenerator:
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
 
-        # Generate 4G charts (TANPA Spectral Efficiency dulu)
-        lte_kpis = [
+         lte_kpis = [
             ("SESSION_SSR", "Session Setup Success Rate (%)", 99, True),
             ("RACH_SR", "RACH Success Rate (%)", 85, True),
             ("HO_SR", "Handover Success Rate (%)", 97, True),
@@ -74,7 +67,6 @@ class ChartGenerator:
             ("LATENCY", "Packet Latency (ms)", 30, True),
             ("LTC_NON_CAP", "LTC Non Capacity (%)", 3, False),
             ("OVERLAP_RATE", "Coverage Overlapping Ratio (%)", 35, False),
-            # HAPUS: ('SPECTRAL_EFF', 'Spectral Efficiency (bps/Hz)', 1.1, True),
             ("VOLTE_CSSR", "VoLTE Call Success Rate (%)", 97, True),
             ("VOLTE_DROP", "VoLTE Call Drop Rate (%)", 2, True),
             ("SRVCC_SR", "SRVCC Success Rate (%)", 97, True),
@@ -95,8 +87,6 @@ class ChartGenerator:
                     print(f"✓ Generated chart: {kpi_name}")
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
-
-        # TAMBAHAN: Generate Spectral Efficiency charts per Band/TX combination
         se_configs = [
             ("2T2R", 850, 1.1, "SE 2T2R 850MHz"),
             ("2T2R", 900, 1.1, "SE 2T2R 900MHz"),
@@ -113,7 +103,6 @@ class ChartGenerator:
                     lte_cluster, tx_cond, band_cond, baseline, chart_name
                 )
                 if chart_img:
-                    # Create safe key name
                     safe_name = chart_name.replace(" ", "_").replace("/", "_")
                     charts[f"4G_SE_{safe_name}"] = chart_img
                     print(f"✓ Generated chart: {chart_name}")
@@ -128,22 +117,18 @@ class ChartGenerator:
         if len(df) == 0:
             return None
 
-        # Get BEGIN_TIME column
         if tech == "2G RAN":
             time_col = df.columns[GSMColumns.BEGIN_TIME]
         else:
             time_col = df.columns[LTEColumns.BEGIN_TIME]
 
-        # Prepare data
         df_chart = df.copy()
         df_chart["DATE"] = pd.to_datetime(df_chart[time_col])
 
-        # Group by date and aggregate
+
         if is_ratio:
-            # For ratio KPIs, just take average (already calculated)
             daily_agg = df_chart.groupby("DATE")[kpi_col].mean().reset_index()
         else:
-            # For non-ratio KPIs, take average
             daily_agg = df_chart.groupby("DATE")[kpi_col].mean().reset_index()
 
         daily_agg = daily_agg.dropna()
@@ -151,15 +136,12 @@ class ChartGenerator:
         if len(daily_agg) == 0:
             return None
 
-        # Sort by date
         daily_agg = daily_agg.sort_values("DATE")
 
-        # Create figure
         fig, ax = plt.subplots(figsize=(14, 7))
         fig.patch.set_edgecolor("black")
         fig.patch.set_linewidth(2)
 
-        # Plot KPI
         ax.plot(
             daily_agg["DATE"],
             daily_agg[kpi_col],
@@ -171,7 +153,6 @@ class ChartGenerator:
             alpha=0.8,
         )
 
-        # Plot baseline with dashdot style
         ax.axhline(
             y=baseline,
             color="red",
@@ -181,7 +162,6 @@ class ChartGenerator:
             alpha=0.7,
         )
 
-        # Formatting
         ax.set_xlabel("Date", fontsize=13, fontweight="bold")
         ax.set_ylabel(kpi_name, fontsize=13, fontweight="bold")
         ax.set_title(
@@ -191,22 +171,14 @@ class ChartGenerator:
             pad=20,
         )
 
-        # Grid
         ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.5)
-
-        # Legend
         ax.legend(loc="best", fontsize=11, framealpha=0.9)
-
-        # Format x-axis dates
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%b-%y"))
         ax.xaxis.set_major_locator(
             mdates.DayLocator(interval=max(1, len(daily_agg) // 15))
         )
         plt.xticks(rotation=45, ha="right")
-
-        # Add value annotations for key points (first, last, min, max)
         if len(daily_agg) > 0:
-            # First point
             first_val = daily_agg.iloc[0][kpi_col]
             ax.annotate(
                 f"{first_val:.2f}",
@@ -216,8 +188,6 @@ class ChartGenerator:
                 fontsize=9,
                 alpha=0.7,
             )
-
-            # Last point
             last_val = daily_agg.iloc[-1][kpi_col]
             ax.annotate(
                 f"{last_val:.2f}",
@@ -229,8 +199,6 @@ class ChartGenerator:
             )
 
         plt.tight_layout()
-
-        # Save to BytesIO
         buf = BytesIO()
         plt.savefig(
             buf,
@@ -252,33 +220,23 @@ class ChartGenerator:
         """Generate chart with NUM/DEN aggregation"""
         if len(df) == 0:
             return None
-
-        # Get BEGIN_TIME column
         if tech == "2G RAN":
             time_col = df.columns[GSMColumns.BEGIN_TIME]
         else:
             time_col = df.columns[LTEColumns.BEGIN_TIME]
-
-        # Prepare data
         df_chart = df.copy()
         df_chart["DATE"] = pd.to_datetime(df_chart[time_col])
-
-        # Get original column indices
         if tech == "2G RAN":
             num_idx = getattr(GSMColumns, num_col)
             den_idx = getattr(GSMColumns, den_col)
         else:
             num_idx = getattr(LTEColumns, num_col)
             den_idx = getattr(LTEColumns, den_col)
-
-        # Group by date and SUM num/den first
         daily_agg = (
             df_chart.groupby("DATE")
             .agg({df_chart.columns[num_idx]: "sum", df_chart.columns[den_idx]: "sum"})
             .reset_index()
         )
-
-        # Calculate ratio
         daily_agg["KPI_VALUE"] = np.where(
             daily_agg[df_chart.columns[den_idx]] > 0,
             (
@@ -294,13 +252,9 @@ class ChartGenerator:
         if len(daily_agg) == 0:
             return None
 
-        # Sort by date
         daily_agg = daily_agg.sort_values("DATE")
 
-        # Create figure
         fig, ax = plt.subplots(figsize=(14, 7))
-
-        # Plot KPI
         ax.plot(
             daily_agg["DATE"],
             daily_agg["KPI_VALUE"],
@@ -311,8 +265,6 @@ class ChartGenerator:
             color="#2E86AB",
             alpha=0.8,
         )
-
-        # Plot baseline with dashdot style
         ax.axhline(
             y=baseline,
             color="red",
@@ -322,7 +274,6 @@ class ChartGenerator:
             alpha=0.7,
         )
 
-        # Formatting
         ax.set_xlabel("Date", fontsize=13, fontweight="bold")
         ax.set_ylabel(kpi_name, fontsize=13, fontweight="bold")
         ax.set_title(
@@ -334,15 +285,11 @@ class ChartGenerator:
 
         ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.5)
         ax.legend(loc="best", fontsize=11, framealpha=0.9)
-
-        # Format x-axis dates
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%b-%y"))
         ax.xaxis.set_major_locator(
             mdates.DayLocator(interval=max(1, len(daily_agg) // 15))
         )
         plt.xticks(rotation=45, ha="right")
-
-        # Annotations
         if len(daily_agg) > 0:
             first_val = daily_agg.iloc[0]["KPI_VALUE"]
             ax.annotate(
@@ -365,8 +312,6 @@ class ChartGenerator:
             )
 
         plt.tight_layout()
-
-        # Save to BytesIO
         buf = BytesIO()
         plt.savefig(buf, format="png", dpi=100, bbox_inches="tight")
         buf.seek(0)
@@ -379,48 +324,31 @@ class ChartGenerator:
         """Generate Spectral Efficiency chart for specific TX/Band combination"""
         if len(df) == 0:
             return None
-
-        # Filter by TX
         if isinstance(tx_cond, list):
             mask_tx = df["TX"].isin(tx_cond)
         else:
             mask_tx = df["TX"] == tx_cond
-
-        # Filter by Band
         if isinstance(band_cond, list):
             mask_band = df["LTE_BAND"].isin(band_cond)
         else:
             mask_band = df["LTE_BAND"] == band_cond
-
-        # Apply filters
         filtered_df = df[mask_tx & mask_band].copy()
 
         if len(filtered_df) == 0:
             print(f"⚠ No data for {chart_name}")
             return None
 
-        # Get BEGIN_TIME column
         time_col = filtered_df.columns[LTEColumns.BEGIN_TIME]
-
-        # Prepare data
         filtered_df["DATE"] = pd.to_datetime(filtered_df[time_col])
-
-        # Group by date and average
         daily_agg = filtered_df.groupby("DATE")["SPECTRAL_EFF"].mean().reset_index()
         daily_agg = daily_agg.dropna()
 
         if len(daily_agg) == 0:
             return None
-
-        # Sort by date
         daily_agg = daily_agg.sort_values("DATE")
-
-        # Create figure with border
         fig, ax = plt.subplots(figsize=(14, 7))
         fig.patch.set_edgecolor("black")
         fig.patch.set_linewidth(2)
-
-        # Plot Spectral Efficiency
         ax.plot(
             daily_agg["DATE"],
             daily_agg["SPECTRAL_EFF"],
@@ -431,8 +359,6 @@ class ChartGenerator:
             color="#2E86AB",
             alpha=0.8,
         )
-
-        # Plot baseline with dashdot style
         ax.axhline(
             y=baseline,
             color="red",
@@ -442,11 +368,8 @@ class ChartGenerator:
             alpha=0.7,
         )
 
-        # Formatting
         ax.set_xlabel("Date", fontsize=13, fontweight="bold")
         ax.set_ylabel("Spectral Efficiency (bps/Hz)", fontsize=13, fontweight="bold")
-
-        # Title with TX and Band info
         if isinstance(tx_cond, list):
             tx_str = "/".join(tx_cond)
         else:

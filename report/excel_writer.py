@@ -38,20 +38,13 @@ class ExcelReportWriter:
     def write_report(self, cluster):
         """Write report for a specific cluster"""
         print(f"\n=== Writing report for cluster: {cluster} ===")
-
-        # Load template
         wb = self._load_template()
-
-        # Get and sort months
         sorted_months = self._get_sorted_months(cluster)
         if not sorted_months:
             print(f"⚠ No data for cluster {cluster}")
             return
 
-        # Write all sheets
         self._write_all_sheets(wb, cluster, sorted_months)
-
-        # Save workbook
         self._save_workbook(wb, cluster)
 
     def _load_template(self):
@@ -70,12 +63,10 @@ class ExcelReportWriter:
         """Get and sort months for the cluster"""
         cluster_results = self.validation_results.get(cluster, {})
         months = [m for m in cluster_results.keys() if m !=
-                  "NGI"]  # ← exclude NGI
+                  "NGI"]
 
         if not months:
             return []
-
-        # Sort months by date
         month_dates = []
         for month in months:
             try:
@@ -105,7 +96,7 @@ class ExcelReportWriter:
                     wb, cluster, sorted_months),
             ),
             (
-                "NGI Contributors",  # ← NEW: sheet khusus NGI
+                "NGI Contributors",
                 lambda: self._write_ngi_contributors_sheet(wb, cluster),
             ),
             ("RAW", lambda: self._write_raw_sheets(wb, cluster)),
@@ -141,11 +132,8 @@ class ExcelReportWriter:
             traceback.print_exc()
             raise
 
-    # ===================== FAC SHEET =====================
-
     def _write_fac_sheet(self, wb, cluster, months, cluster_results):
         """Write FAC/Template sheet"""
-        # Get or create sheet
         if "Template" in wb.sheetnames:
             ws = wb["Template"]
         elif "FAC" in wb.sheetnames:
@@ -153,34 +141,20 @@ class ExcelReportWriter:
         else:
             ws = wb.create_sheet("FAC")
 
-        # Add logos
         self._add_logos(ws)
-
-        # Get cluster data
         lte_data = self.transformed_data["lte"]
         gsm_data = self.transformed_data["gsm"]
         cluster_lte = lte_data[lte_data["CLUSTER"] == cluster]
         cluster_gsm = gsm_data[gsm_data["CLUSTER"] == cluster]
-
-        # Get date range for title
         dates = pd.to_datetime(
             cluster_lte.iloc[:, LTEColumns.BEGIN_TIME]).unique()
         date_range = get_three_month_range(dates)
 
-        # Write title
         ws["A6"] = f"FAC KPI Achievement {cluster} - {date_range}"
         ws["A6"].font = self.formatter.header_font
-
-        # Write cluster information
         self._write_cluster_info(ws, cluster, cluster_lte, cluster_gsm, dates)
-
-        # Write month headers
         self._write_month_headers(ws, months[:3], cluster_lte)
-
-        # Write KPI results (including NGI)
         self._write_kpi_results(ws, months[:3], cluster_results)
-
-        # Write overall results
         self._write_overall_results(ws, months[:3], cluster_results)
 
     def _write_cluster_info(self, ws, cluster, cluster_lte, cluster_gsm, dates):
@@ -214,7 +188,6 @@ class ExcelReportWriter:
         for idx, month in enumerate(months):
             col = 13 + (idx * 2)
 
-            # Write month name
             try:
                 dt = pd.to_datetime(month, format="%b-%y")
                 month_name = dt.strftime("%B")
@@ -224,7 +197,6 @@ class ExcelReportWriter:
             ws.cell(row=12, column=col).value = month_name
             ws.cell(row=12, column=col).font = self.formatter.header_font
 
-            # Write date range
             month_data = cluster_lte[cluster_lte["MONTH"] == month]
             if len(month_data) > 0:
                 dates_month = pd.to_datetime(
@@ -244,16 +216,13 @@ class ExcelReportWriter:
             result_cell = ws.cell(row=63, column=col)
             self.formatter.format_pass_fail(result_cell, overall_pass)
 
-    # ===================== KPI RESULTS WRITING (UPDATED FOR NGI) =====================
-
     def _write_kpi_results(self, ws, months, cluster_results):
         """Write KPI results including NGI"""
         kpi_mapping = self._get_kpi_mapping()
 
-        # Write GSM/LTE per month
         for month_idx, month in enumerate(months):
-            value_col = 13 + month_idx * 2  # M=13, O=15, Q=17
-            result_col = value_col + 1      # N=14, P=16, R=18
+            value_col = 13 + month_idx * 2
+            result_col = value_col + 1
 
             month_results = cluster_results.get(month, {})
             self._write_tech_kpi_results(
@@ -265,24 +234,19 @@ class ExcelReportWriter:
                     "lte", {}), kpi_mapping, "lte", value_col, result_col
             )
 
-        # ===== NGI: tulis sekali saja (tanpa dimensi bulan) =====
-        ngi_results = cluster_results.get("NGI")  # ← FIX: langsung ambil dict
+        ngi_results = cluster_results.get("NGI")
         if ngi_results:
             print(f"  Writing NGI results: {list(ngi_results.keys())}")
-            value_col = 13  # kolom M
-            # Status column: sesuaikan dengan template (P=16 jika M-P merged)
-            status_col = 16  # kolom P (ubah ke 14 jika status di kolom N)
+            value_col = 13
+            status_col = 16
 
             for key, kpi in ngi_results.items():
                 row = kpi.get("row")
                 if row is None:
                     continue
 
-                # Tulis value
                 value_cell = ws.cell(row=row, column=value_col)
                 self.formatter.format_value(value_cell, kpi["value"], "0.00")
-
-                # Tulis status
                 status_cell = ws.cell(row=row, column=status_col)
                 self.formatter.format_pass_fail(status_cell, kpi["pass"])
 
@@ -350,17 +314,11 @@ class ExcelReportWriter:
                 if row_key not in kpi_mapping:
                     continue
                 row = kpi_mapping[row_key]
-
-            # Write value
             value_cell = ws.cell(row=row, column=value_col)
             self.formatter.format_value(
                 value_cell, kpi_result["value"], "0.00")
-
-            # Write pass/fail
             result_cell = ws.cell(row=row, column=result_col)
             self.formatter.format_pass_fail(result_cell, kpi_result["pass"])
-
-            # DEBUG for SE
             if kpi_key.startswith("se_"):
                 print(
                     f"  ✓ Written {kpi_key} to row {row}: value={kpi_result['value']:.2f}%, pass={kpi_result['pass']}"
@@ -404,8 +362,6 @@ class ExcelReportWriter:
         """Collect LTE failed cells"""
         contributors = []
         lte_month = lte_cluster[lte_cluster["MONTH"] == month]
-
-        # Standard LTE checks
         lte_checks = [
             ("SESSION_SSR", 99, "<", "Accessibility", "Session Setup Success Rate"),
             ("RACH_SR", 85, "<", "Accessibility", "RACH Success Rate (< 85%)"),
@@ -448,13 +404,11 @@ class ExcelReportWriter:
             ("LATENCY", 30, ">=", "Integrity", "Packet Latency (>= 30 ms)"),
             ("LATENCY", 40, ">=", "Integrity", "Packet Latency (>= 40 ms)"),
             ("LTC_NON_CAP", 3, "<", "Utilization", "LTC Non Capacity (<= 5%)"),
-            # VoLTE
             ("VOLTE_CSSR", 97, "<", "VoLTE", "VoLTE Call Success Rate"),
             ("VOLTE_DROP", 2, ">=", "VoLTE", "VoLTE Call Drop Rate"),
             ("SRVCC_SR", 97, "<", "VoLTE", "SRVCC Success Rate"),
         ]
 
-        # Process standard checks
         for kpi_col, baseline, operator, clause, name in lte_checks:
             if kpi_col not in lte_month.columns:
                 continue
@@ -479,7 +433,6 @@ class ExcelReportWriter:
                     }
                 )
 
-        # UL RSSI (special case: FAIL if > -105)
         if "UL_RSSI" in lte_month.columns:
             rssi_fails = lte_month[lte_month["UL_RSSI"] > -105]
             for _, row in rssi_fails.iterrows():
@@ -497,7 +450,6 @@ class ExcelReportWriter:
                     }
                 )
 
-        # Overlap Rate (special case: FAIL if >= 35)
         if "OVERLAP_RATE" in lte_month.columns:
             ov_fails = lte_month[lte_month["OVERLAP_RATE"] >= 35]
             for _, row in ov_fails.iterrows():
@@ -515,7 +467,6 @@ class ExcelReportWriter:
                     }
                 )
 
-        # Spectral Efficiency checks
         se_checks = [
             ("se_850_2t2r", "2T2R", 850, 1.1, "Spectral Efficiency 850MHz 2T2R"),
             ("se_900_2t2r", "2T2R", 900, 1.1, "Spectral Efficiency 900MHz 2T2R"),
@@ -547,26 +498,22 @@ class ExcelReportWriter:
         ]
 
         for key, tx_cond, band_cond, baseline, name in se_checks:
-            # Filter by TX
             if isinstance(tx_cond, list):
                 mask_tx = lte_month["TX"].isin(tx_cond)
             else:
                 mask_tx = lte_month["TX"] == tx_cond
 
-            # Filter by Band
             if isinstance(band_cond, list):
                 mask_band = lte_month["LTE_BAND"].isin(band_cond)
             else:
                 mask_band = lte_month["LTE_BAND"] == band_cond
 
-            # Get filtered data
             filtered = lte_month[mask_tx & mask_band]
             se_vals = filtered["SPECTRAL_EFF"].dropna()
 
             if len(se_vals) == 0:
                 continue
 
-            # Find failed cells (SE < baseline)
             fails = filtered[filtered["SPECTRAL_EFF"] < baseline]
 
             for _, row in fails.iterrows():
@@ -625,8 +572,6 @@ class ExcelReportWriter:
             status_cell = ws.cell(row=row_idx, column=9)
             self.formatter.format_pass_fail(status_cell, False)
 
-    # ===================== RAW SHEETS =====================
-
     def _write_raw_sheets(self, wb, cluster):
         """Write RAW 2G and RAW 4G sheets"""
         self._write_raw_2g_sheet(wb, cluster)
@@ -639,8 +584,6 @@ class ExcelReportWriter:
 
         if len(gsm_cluster) == 0:
             return
-
-        # Prepare data
         gsm_raw = gsm_cluster[
             [
                 gsm_cluster.columns[GSMColumns.BEGIN_TIME],
@@ -666,7 +609,6 @@ class ExcelReportWriter:
             "%-m/%-d/%Y"
         )
 
-        # Write to sheet
         if "RAW 2G" in wb.sheetnames:
             wb.remove(wb["RAW 2G"])
         ws = wb.create_sheet("RAW 2G")
@@ -681,8 +623,6 @@ class ExcelReportWriter:
 
         if len(lte_cluster) == 0:
             return
-
-        # Prepare data
         lte_raw = lte_cluster[
             [
                 lte_cluster.columns[LTEColumns.BEGIN_TIME],
@@ -739,8 +679,6 @@ class ExcelReportWriter:
         lte_raw["BEGIN_TIME"] = pd.to_datetime(lte_raw["BEGIN_TIME"]).dt.strftime(
             "%-m/%-d/%Y"
         )
-
-        # Write to sheet
         if "RAW 4G" in wb.sheetnames:
             wb.remove(wb["RAW 4G"])
         ws = wb.create_sheet("RAW 4G")
@@ -750,28 +688,23 @@ class ExcelReportWriter:
 
     def _write_raw_data(self, ws, df):
         """Write raw data to worksheet"""
-        # Write headers
         for c_idx, col in enumerate(df.columns, 1):
             self.formatter.format_header_small(
                 ws.cell(row=1, column=c_idx), col)
 
-        # Write data
         for r_idx, row in enumerate(df.itertuples(index=False), 2):
             for c_idx, value in enumerate(row, 1):
                 cell = ws.cell(row=r_idx, column=c_idx)
                 cell.value = value
 
-                # Format numeric columns
                 if c_idx > 3 and isinstance(value, (int, float)):
                     cell.number_format = "0.00"
 
-    # ===================== CHARTS SHEET =====================
 
     def _write_charts_sheet(self, wb, cluster):
         """Write Charts sheet with KPI trend charts"""
         print(f"\n=== Generating charts for {cluster} ===")
 
-        # Generate charts
         chart_gen = ChartGenerator(
             self.kpi_data, self.transformed_data, cluster)
         charts = chart_gen.generate_all_charts()
@@ -780,16 +713,13 @@ class ExcelReportWriter:
             print("⚠ No charts generated")
             return
 
-        # Create Charts sheet
         if "Charts" in wb.sheetnames:
             wb.remove(wb["Charts"])
         ws = wb.create_sheet("Charts")
 
-        # Write title
         ws["A1"] = f"KPI Trend Charts - {cluster}"
         ws["A1"].font = self.formatter.header_font_small
 
-        # Chart layout configuration
         current_row = 3
         current_col = 1
         charts_per_row = 2
@@ -797,25 +727,17 @@ class ExcelReportWriter:
         chart_width = 12
         chart_num = 0
 
-        # Add charts to sheet
         for chart_key, chart_base64 in charts.items():
             try:
-                # Decode and create image
                 img_data = base64.b64decode(chart_base64)
                 img = XLImage(BytesIO(img_data))
                 img.width = 700
                 img.height = 350
-
-                # Calculate position
                 col_offset = (current_col - 1) * chart_width
                 col_letter = self._get_column_letter(col_offset + 1)
                 cell_position = f"{col_letter}{current_row}"
-
-                # Add image to sheet
                 ws.add_image(img, cell_position)
                 chart_num += 1
-
-                # Move to next position
                 current_col += 1
                 if current_col > charts_per_row:
                     current_col = 1
@@ -838,15 +760,12 @@ class ExcelReportWriter:
             col_num //= 26
         return result
 
-    # ===================== CONTRIBUTORS SHEETS =====================
-
     def _write_contributors_sheet(self, wb, cluster, months):
         """Write Contributors sheet with cells that failed (monthly GSM/LTE only)"""
         if "Contributors" in wb.sheetnames:
             wb.remove(wb["Contributors"])
         ws = wb.create_sheet("Contributors")
 
-        # Write headers
         headers = [
             "Month",
             "Clause Type",
@@ -863,13 +782,8 @@ class ExcelReportWriter:
             self.formatter.format_header_small(
                 ws.cell(row=1, column=col_idx), header)
 
-        # Collect contributors (NGI EXCLUDED, handled in separate sheet)
         contributors = self._collect_contributors(cluster, months)
-
-        # Remove duplicates
         contributors = self._remove_duplicate_contributors(contributors)
-
-        # Write contributors
         self._write_contributor_rows(ws, contributors)
 
         print(
@@ -883,12 +797,9 @@ class ExcelReportWriter:
             print("  No NGI contributors (all cells passed)")
             return
 
-        # Create sheet
         if "NGI Contributors" in wb.sheetnames:
             wb.remove(wb["NGI Contributors"])
         ws = wb.create_sheet("NGI Contributors")
-
-        # Headers
         headers = [
             "CAT",
             "Clause Type",
@@ -902,8 +813,6 @@ class ExcelReportWriter:
         for col_idx, h in enumerate(headers, 1):
             self.formatter.format_header_small(
                 ws.cell(row=1, column=col_idx), h)
-
-        # Write rows
         row_idx = 2
         for c in ngi_contribs:
             ws.cell(row=row_idx, column=1, value=c.get("CAT", ""))
@@ -918,8 +827,7 @@ class ExcelReportWriter:
             ws.cell(row=row_idx, column=7, value=c["Baseline"])
 
             scell = ws.cell(row=row_idx, column=8)
-            self.formatter.format_pass_fail(scell, False)  # semua FAIL
-
+            self.formatter.format_pass_fail(scell, False)
             row_idx += 1
 
         print(
@@ -934,15 +842,10 @@ class ExcelReportWriter:
         gsm_cluster = gsm_data[gsm_data["CLUSTER"] == cluster]
 
         for month in months:
-            # Collect GSM failures
             contributors.extend(
                 self._collect_gsm_contributors(gsm_cluster, month))
-            # Collect LTE failures
             contributors.extend(
                 self._collect_lte_contributors(lte_cluster, month))
-
-        # NOTE: NGI dihapus dari sini, pindah ke sheet terpisah
-        # contributors.extend(self.collect_ngi_contributors(cluster))  # ← REMOVED
 
         contributors = self._remove_duplicate_contributors(contributors)
         return contributors
@@ -1020,8 +923,6 @@ class ExcelReportWriter:
             })
 
         return contributors
-
-    # ===================== LOGOS =====================
 
     def _add_logos(self, ws):
         """Add logos to worksheet"""
