@@ -15,32 +15,24 @@ import PyInstaller.__main__
 # =============================================================================
 
 APP_NAME = "FAC-GR"
-MAIN_SCRIPT = "main.py"  # Sesuaikan jika file utama Anda berbeda
+MAIN_SCRIPT = "main.py"
 
 ICON_FILE = "app.ico"
 
-# HANYA folder yang WAJIB di-pack (misalnya assets berisi logo, icon PNG, base64 logos, dll)
+
 INCLUDE_DIRS = [
-    "assets",                    # WAJIB: logo, icon UI, dll
-    # Tambahkan folder lain jika ada yang HARUS di-pack (misal: "fonts", "styles")
+    "assets",
+
 ]
 
-# File yang DI-EXCLUDE dari packing (akan dicari di luar exe saat runtime)
 EXCLUDED_FILES = [
     "datatemplate.xlsx",
     "config/kpi_config.json",
     "config/band_mapping.json",
-    # Tambahkan file JSON atau config lain di sini jika ada
 ]
 
-# Mode build
-# False = onedir (lebih stabil), True = onefile (besar & lambat start)
 ONEFILE = False
 CLEAN_FIRST = True
-
-# =============================================================================
-# FUNGSI
-# =============================================================================
 
 
 def clean_build():
@@ -59,7 +51,6 @@ def clean_build():
 
 
 def collect_data_args():
-    """Hanya include folder yang benar-benar harus di-pack"""
     data_args = []
 
     for dir_path in INCLUDE_DIRS:
@@ -83,7 +74,7 @@ def build_executable():
     args = [
         MAIN_SCRIPT,
         "--name=" + APP_NAME,
-        "--windowed",                  # GUI app, tanpa console
+        "--windowed",
         "--noconfirm",
     ]
 
@@ -94,18 +85,16 @@ def build_executable():
     # Mode build
     args.append("--onefile" if ONEFILE else "--onedir")
 
-    # Include hanya folder yang diperlukan (assets dll)
     for data in collect_data_args():
         args.append(f"--add-data={data}")
 
-    # Hidden imports umum untuk PyQt6 + pandas + openpyxl
     hidden_imports = [
         "PyQt6.QtCore",
         "PyQt6.QtGui",
         "PyQt6.QtWidgets",
         "pandas",
         "openpyxl",
-        "numpy",  # sering dibutuhkan pandas
+        "numpy",
     ]
     for hi in hidden_imports:
         args.append(f"--hidden-import={hi}")
