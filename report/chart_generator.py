@@ -1,9 +1,9 @@
-"""Chart generation module"""
+"""Chart generation module - UPDATED WITH 30-DAY VERTICAL LINES"""
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from datetime import datetime
+from datetime import datetime, timedelta
 import numpy as np
 from io import BytesIO
 import base64
@@ -13,10 +13,11 @@ from config.settings import LTEColumns, GSMColumns
 class ChartGenerator:
     """Generate charts for KPI trends"""
 
-    def __init__(self, kpi_data, transformed_data, cluster):
+    def __init__(self, kpi_data, transformed_data, cluster, period_info=None):
         self.kpi_data = kpi_data
         self.transformed_data = transformed_data
         self.cluster = cluster
+        self.period_info = period_info
         plt.style.use("seaborn-v0_8-darkgrid")
 
     def generate_all_charts(self):
@@ -24,12 +25,22 @@ class ChartGenerator:
         print(f"\n=== Generating charts for {self.cluster} ===")
 
         charts = {}
-
         lte_data = self.kpi_data["lte"]
         gsm_data = self.kpi_data["gsm"]
 
         lte_cluster = lte_data[lte_data["CLUSTER"] == self.cluster].copy()
         gsm_cluster = gsm_data[gsm_data["CLUSTER"] == self.cluster].copy()
+
+        # 🔧 FILTER TO PERIOD RANGE
+        if "PERIOD" in lte_cluster.columns and self.period_info is not None:
+            valid_periods = ["Period 1", "Period 2", "Period 3"]
+            lte_cluster = lte_cluster[lte_cluster["PERIOD"].isin(valid_periods)].copy()
+            print(f"  Filtered LTE to period range: {len(lte_cluster)} records")
+        
+        if "PERIOD" in gsm_cluster.columns and self.period_info is not None:
+            valid_periods = ["Period 1", "Period 2", "Period 3"]
+            gsm_cluster = gsm_cluster[gsm_cluster["PERIOD"].isin(valid_periods)].copy()
+            print(f"  Filtered GSM to period range: {len(gsm_cluster)} records")
 
         if len(lte_cluster) == 0 and len(gsm_cluster) == 0:
             print("⚠ No data for charts")
@@ -52,7 +63,7 @@ class ChartGenerator:
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
 
-         lte_kpis = [
+        lte_kpis = [
             ("SESSION_SSR", "Session Setup Success Rate (%)", 99, True),
             ("RACH_SR", "RACH Success Rate (%)", 85, True),
             ("HO_SR", "Handover Success Rate (%)", 97, True),
@@ -87,6 +98,7 @@ class ChartGenerator:
                     print(f"✓ Generated chart: {kpi_name}")
             except Exception as e:
                 print(f"⚠ Could not generate chart for {kpi_name}: {e}")
+
         se_configs = [
             ("2T2R", 850, 1.1, "SE 2T2R 850MHz"),
             ("2T2R", 900, 1.1, "SE 2T2R 900MHz"),
@@ -112,8 +124,40 @@ class ChartGenerator:
         print(f"✓ Generated {len(charts)} charts total")
         return charts
 
+    def _add_period_lines(self, ax, dates):
+        """Add vertical lines every 30 days"""
+        if self.period_info is None or len(dates) == 0:
+            return
+        
+        min_date = dates.min()
+        max_date = dates.max()
+        
+        # Get period boundaries
+        period_1_end = self.period_info['period_1']['end']
+        period_2_end = self.period_info['period_2']['end']
+        
+        # Add vertical lines at period boundaries if they're within the data range
+        if min_date <= period_1_end <= max_date:
+            ax.axvline(
+                x=period_1_end,
+                color='gray',
+                linestyle='--',
+                linewidth=1.5,
+                alpha=0.7,
+                label='Period Boundary'
+            )
+        
+        if min_date <= period_2_end <= max_date:
+            ax.axvline(
+                x=period_2_end,
+                color='gray',
+                linestyle='--',
+                linewidth=1.5,
+                alpha=0.7
+            )
+
     def _generate_chart(self, df, kpi_col, kpi_name, baseline, tech, is_ratio=False):
-        """Generate a single KPI trend chart"""
+        """Generate a single KPI trend chart with period lines"""
         if len(df) == 0:
             return None
 
@@ -124,7 +168,6 @@ class ChartGenerator:
 
         df_chart = df.copy()
         df_chart["DATE"] = pd.to_datetime(df_chart[time_col])
-
 
         if is_ratio:
             daily_agg = df_chart.groupby("DATE")[kpi_col].mean().reset_index()
@@ -162,6 +205,9 @@ class ChartGenerator:
             alpha=0.7,
         )
 
+        # Add period vertical lines
+        self._add_period_lines(ax, daily_agg["DATE"])
+
         ax.set_xlabel("Date", fontsize=13, fontweight="bold")
         ax.set_ylabel(kpi_name, fontsize=13, fontweight="bold")
         ax.set_title(
@@ -178,6 +224,7 @@ class ChartGenerator:
             mdates.DayLocator(interval=max(1, len(daily_agg) // 15))
         )
         plt.xticks(rotation=45, ha="right")
+
         if len(daily_agg) > 0:
             first_val = daily_agg.iloc[0][kpi_col]
             ax.annotate(
@@ -214,124 +261,21 @@ class ChartGenerator:
 
         return img_base64
 
-    def _generate_chart_with_numden(
-        self, df, num_col, den_col, kpi_name, baseline, tech
-    ):
-        """Generate chart with NUM/DEN aggregation"""
-        if len(df) == 0:
-            return None
-        if tech == "2G RAN":
-            time_col = df.columns[GSMColumns.BEGIN_TIME]
-        else:
-            time_col = df.columns[LTEColumns.BEGIN_TIME]
-        df_chart = df.copy()
-        df_chart["DATE"] = pd.to_datetime(df_chart[time_col])
-        if tech == "2G RAN":
-            num_idx = getattr(GSMColumns, num_col)
-            den_idx = getattr(GSMColumns, den_col)
-        else:
-            num_idx = getattr(LTEColumns, num_col)
-            den_idx = getattr(LTEColumns, den_col)
-        daily_agg = (
-            df_chart.groupby("DATE")
-            .agg({df_chart.columns[num_idx]: "sum", df_chart.columns[den_idx]: "sum"})
-            .reset_index()
-        )
-        daily_agg["KPI_VALUE"] = np.where(
-            daily_agg[df_chart.columns[den_idx]] > 0,
-            (
-                daily_agg[df_chart.columns[num_idx]]
-                / daily_agg[df_chart.columns[den_idx]]
-            )
-            * 100,
-            None,
-        )
-
-        daily_agg = daily_agg.dropna(subset=["KPI_VALUE"])
-
-        if len(daily_agg) == 0:
-            return None
-
-        daily_agg = daily_agg.sort_values("DATE")
-
-        fig, ax = plt.subplots(figsize=(14, 7))
-        ax.plot(
-            daily_agg["DATE"],
-            daily_agg["KPI_VALUE"],
-            marker="o",
-            linewidth=2,
-            markersize=5,
-            label=kpi_name,
-            color="#2E86AB",
-            alpha=0.8,
-        )
-        ax.axhline(
-            y=baseline,
-            color="red",
-            linestyle="dashdot",
-            linewidth=2,
-            label=f"Baseline ({baseline})",
-            alpha=0.7,
-        )
-
-        ax.set_xlabel("Date", fontsize=13, fontweight="bold")
-        ax.set_ylabel(kpi_name, fontsize=13, fontweight="bold")
-        ax.set_title(
-            f"{kpi_name} - {self.cluster} ({tech})",
-            fontsize=15,
-            fontweight="bold",
-            pad=20,
-        )
-
-        ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.5)
-        ax.legend(loc="best", fontsize=11, framealpha=0.9)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%b-%y"))
-        ax.xaxis.set_major_locator(
-            mdates.DayLocator(interval=max(1, len(daily_agg) // 15))
-        )
-        plt.xticks(rotation=45, ha="right")
-        if len(daily_agg) > 0:
-            first_val = daily_agg.iloc[0]["KPI_VALUE"]
-            ax.annotate(
-                f"{first_val:.2f}",
-                xy=(daily_agg.iloc[0]["DATE"], first_val),
-                xytext=(10, 10),
-                textcoords="offset points",
-                fontsize=9,
-                alpha=0.7,
-            )
-
-            last_val = daily_agg.iloc[-1]["KPI_VALUE"]
-            ax.annotate(
-                f"{last_val:.2f}",
-                xy=(daily_agg.iloc[-1]["DATE"], last_val),
-                xytext=(10, -15),
-                textcoords="offset points",
-                fontsize=9,
-                alpha=0.7,
-            )
-
-        plt.tight_layout()
-        buf = BytesIO()
-        plt.savefig(buf, format="png", dpi=100, bbox_inches="tight")
-        buf.seek(0)
-        img_base64 = base64.b64encode(buf.read()).decode()
-        plt.close(fig)
-
-        return img_base64
-
     def _generate_se_chart(self, df, tx_cond, band_cond, baseline, chart_name):
-        """Generate Spectral Efficiency chart for specific TX/Band combination"""
+        """Generate Spectral Efficiency chart with period lines"""
         if len(df) == 0:
             return None
+
         if isinstance(tx_cond, list):
             mask_tx = df["TX"].isin(tx_cond)
         else:
             mask_tx = df["TX"] == tx_cond
+
         if isinstance(band_cond, list):
             mask_band = df["LTE_BAND"].isin(band_cond)
         else:
             mask_band = df["LTE_BAND"] == band_cond
+
         filtered_df = df[mask_tx & mask_band].copy()
 
         if len(filtered_df) == 0:
@@ -345,10 +289,13 @@ class ChartGenerator:
 
         if len(daily_agg) == 0:
             return None
+
         daily_agg = daily_agg.sort_values("DATE")
+
         fig, ax = plt.subplots(figsize=(14, 7))
         fig.patch.set_edgecolor("black")
         fig.patch.set_linewidth(2)
+
         ax.plot(
             daily_agg["DATE"],
             daily_agg["SPECTRAL_EFF"],
@@ -359,6 +306,7 @@ class ChartGenerator:
             color="#2E86AB",
             alpha=0.8,
         )
+
         ax.axhline(
             y=baseline,
             color="red",
@@ -368,8 +316,12 @@ class ChartGenerator:
             alpha=0.7,
         )
 
+        # Add period vertical lines
+        self._add_period_lines(ax, daily_agg["DATE"])
+
         ax.set_xlabel("Date", fontsize=13, fontweight="bold")
         ax.set_ylabel("Spectral Efficiency (bps/Hz)", fontsize=13, fontweight="bold")
+
         if isinstance(tx_cond, list):
             tx_str = "/".join(tx_cond)
         else:
@@ -387,18 +339,14 @@ class ChartGenerator:
             pad=20,
         )
 
-        # Grid
         ax.grid(True, alpha=0.3, linestyle="--", linewidth=0.5)
-
-        # Legend
         ax.legend(loc="best", fontsize=11, framealpha=0.9)
-
-        # Format x-axis dates
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%b-%y"))
         ax.xaxis.set_major_locator(
             mdates.DayLocator(interval=max(1, len(daily_agg) // 15))
         )
         plt.xticks(rotation=45, ha="right")
+
         if len(daily_agg) > 0:
             first_val = daily_agg.iloc[0]["SPECTRAL_EFF"]
             ax.annotate(

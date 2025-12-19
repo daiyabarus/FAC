@@ -45,6 +45,7 @@ class ProcessThread(QThread):
             from kpi.calculator import KPICalculator
             from kpi.validator import KPIValidator
             from report.excel_writer import ExcelReportWriter
+            from report.summary_writer import SummaryExcelWriter
             from assets.logos import get_xlsmart_logo, get_zte_logo
 
             self.progress.emit("Loading data...")
@@ -57,22 +58,17 @@ class ProcessThread(QThread):
             self.progress.emit("Transforming data...")
             transformer = DataTransformer(loader)
             transformed_data = transformer.transform_all()
-            self.progress.emit(
-                f"DEBUG: NGI data = {transformed_data.get('ngi') is not None}"
-            )
-            if transformed_data.get("ngi") is not None:
-                self.progress.emit(
-                    f"DEBUG: NGI rows = {len(transformed_data['ngi'])}")
+            period_info = transformed_data.get('period_info')
 
             self.progress.emit("Calculating KPIs...")
             calculator = KPICalculator(transformed_data)
             kpi_data = calculator.calculate_all()
 
             self.progress.emit("Validating...")
-            validator = KPIValidator(kpi_data)
+            validator = KPIValidator(kpi_data, period_info)
             validation_results = validator.validate_all()
 
-            self.progress.emit("Generating reports...")
+            self.progress.emit("Generating individual cluster reports...")
             clusters = transformed_data["lte"]["CLUSTER"].dropna().unique()
 
             for cluster in clusters:
@@ -83,21 +79,39 @@ class ProcessThread(QThread):
                     validation_results,
                     kpi_data,
                     transformed_data,
+                    period_info,
                 )
                 writer.set_logos(get_xlsmart_logo(), get_zte_logo())
                 writer.write_report(cluster)
 
+            self.progress.emit("Generating cell-level summary report...")
+            
+            kpi_data_with_ngi = {
+                "lte": transformed_data.get("lte"),
+                "gsm": transformed_data.get("gsm"),
+                "ngi": transformed_data.get("ngi"),
+            }
+            
+            summary_writer = SummaryExcelWriter(
+                self.output_dir,
+                validation_results,
+                kpi_data_with_ngi,
+                period_info
+            )
+            summary_writer.write_summary()
+
             self.progress.emit("✓ Done!")
-            self.finished.emit(True, f"{len(clusters)} reports generated")
+            self.finished.emit(
+                True, 
+                f"{len(clusters)} cluster reports + 1 cell-level summary generated"
+            )
 
         except Exception as e:
             import traceback
-
             error_detail = traceback.format_exc()
             self.progress.emit(f"✗ {str(e)}")
             self.progress.emit(error_detail)
             self.finished.emit(False, str(e))
-
 
 class MainWindow(QMainWindow):
     def __init__(self):

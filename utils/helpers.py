@@ -1,222 +1,232 @@
-"""Helper utility functions"""
+"""Helper utilities"""
 
 import re
-from datetime import datetime
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
 
 
 def clean_numeric(value):
-    """Clean numeric values - remove commas and percentages"""
-    if pd.isna(value) or value is None:
+    """Clean numeric values from strings"""
+    if pd.isna(value):
         return None
-
     if isinstance(value, (int, float)):
-        return float(value)
-
-    # Convert to string and clean
-    str_val = str(value).strip()
-
-    # Remove percentage sign
-    if "%" in str_val:
-        str_val = str_val.replace("%", "")
-        try:
-            return float(str_val) / 100
-        except:
-            return None
-
-    # Remove commas (thousand separator)
-    str_val = str_val.replace(",", "")
-
+        return value
+    
+    value_str = str(value).strip()
+    value_str = value_str.replace(',', '')
+    value_str = re.sub(r'[^\d.\-]', '', value_str)
+    
     try:
-        return float(str_val)
-    except:
+        return float(value_str) if value_str else None
+    except ValueError:
         return None
 
 
 def extract_tower_id(me_name):
-    """Extract tower ID from ME name using regex #tower_id#"""
+    """Extract TOWER_ID from ME_NAME"""
     if pd.isna(me_name):
         return None
-
-    pattern = r"#([^#]+)#"
-    match = re.search(pattern, str(me_name))
-
+    
+    me_name_str = str(me_name)
+    match = re.search(r'([A-Z]{3}\d{4})', me_name_str)
+    
     if match:
         return match.group(1)
     return None
 
 
 def map_frequency_band(freq_band):
-    """Map frequency band number to actual frequency"""
-    band_map = {
-        5: 850,
-        3: 1800,
-        1: 2100,
-        40: 2300,
+    """Map frequency band to MHz value"""
+    if pd.isna(freq_band):
+        return None
+    
+    band_mapping = {
         "5": 850,
+        "8": 900,
         "3": 1800,
         "1": 2100,
         "40": 2300,
     }
+    
+    freq_str = str(freq_band).strip()
+    return band_mapping.get(freq_str, None)
 
-    try:
-        if isinstance(freq_band, str):
-            freq_band = int(freq_band)
-        return band_map.get(freq_band, None)
-    except:
+
+def format_date_mmm_yy(date_val):
+    """Format date as MMM-YY (e.g., Sep-25)"""
+    if pd.isna(date_val):
         return None
-
-
-# def format_date_mdy(date_str):
-#     """Convert date from YYYY-MM-DD to M/D/YYYY"""
-#     try:
-#         if isinstance(date_str, str):
-#             dt = pd.to_datetime(date_str)
-#         else:
-#             dt = date_str
-#         return dt.strftime("%-m/%-d/%Y")
-#     except:
-#         return None
-def format_date_mdy(date_str):
-    """Convert date from YYYY-MM-DD to M/D/YYYY"""
+    
     try:
-        if isinstance(date_str, str):
-            dt = pd.to_datetime(date_str)
+        if isinstance(date_val, str):
+            dt = pd.to_datetime(date_val)
         else:
-            dt = date_str
-        # Use strftime without leading zeros
-        # For cross-platform compatibility, use replace instead of %-
-        result = dt.strftime("%m/%d/%Y")
-        # Remove leading zeros
-        parts = result.split("/")
-        return f"{int(parts[0])}/{int(parts[1])}/{parts[2]}"
-    except:
-        return None
-
-
-def format_date_mmm_yy(date_str):
-    """Convert date to MMM-YY format (e.g., Sep-25)"""
-    try:
-        if isinstance(date_str, str):
-            dt = pd.to_datetime(date_str)
-        else:
-            dt = date_str
+            dt = date_val
+        
         return dt.strftime("%b-%y")
     except:
         return None
 
 
-def format_month_name(date_str):
-    """Get full month name (e.g., September)"""
-    try:
-        if isinstance(date_str, str):
-            dt = pd.to_datetime(date_str)
-        else:
-            dt = date_str
-        return dt.strftime("%B")
-    except:
-        return None
-
-
 def format_date_range(start_date, end_date):
-    """Format date range (e.g., 1 October - 31 October)"""
+    """
+    Format date range for display in dd-MMMM format
+    Example: "19-September to 18-October"
+    Works on both Windows and Linux/Mac
+    """
     try:
-        if isinstance(start_date, str):
-            start_dt = pd.to_datetime(start_date)
-        else:
-            start_dt = start_date
-
-        if isinstance(end_date, str):
-            end_dt = pd.to_datetime(end_date)
-        else:
-            end_dt = end_date
-
-        return f"{start_dt.day} {start_dt.strftime('%B')} - {end_dt.day} {end_dt.strftime('%B')}"
-    except:
-        return None
+        start = pd.to_datetime(start_date)
+        end = pd.to_datetime(end_date)
+        
+        # Use .day property instead of %-d for Windows compatibility
+        start_day = str(start.day)
+        start_month = start.strftime("%B")
+        
+        end_day = str(end.day)
+        end_month = end.strftime("%B")
+        
+        return f"{start_day}-{start_month} to {end_day}-{end_month}"
+    except Exception as e:
+        print(f"⚠ Error formatting date range: {e}")
+        import traceback
+        traceback.print_exc()
+        return "N/A"
 
 
 def get_three_month_range(dates):
-    """Get 3-month range string (e.g., 1st October to 31st December)"""
+    """
+    Get date range string for the most recent 3 months (90 days)
+    Format: dd-MMMM to dd-MMMM
+    Example: "19-September to 17-December"
+    """
+    if len(dates) == 0:
+        return "N/A"
+    
     try:
-        sorted_dates = sorted([pd.to_datetime(d) for d in dates])
-        start = sorted_dates[0]
-        end = sorted_dates[-1]
-
-        # Add ordinal suffix
-        def ordinal(n):
-            suffix = ["th", "st", "nd", "rd"] + ["th"] * 6
-            if 10 <= n % 100 <= 20:
-                return f"{n}th"
-            return f"{n}{suffix[n % 10]}"
-
-        return f"{ordinal(start.day)} {start.strftime('%B')} to {ordinal(end.day)} {end.strftime('%B')}"
-    except:
-        return None
+        dates_sorted = sorted(pd.to_datetime(dates))
+        end_date = dates_sorted[-1]
+        start_date = end_date - timedelta(days=89)  # 90 days total including end
+        
+        return format_date_range(start_date, end_date)
+    except Exception as e:
+        print(f"⚠ Error getting three month range: {e}")
+        import traceback
+        traceback.print_exc()
+        return "N/A"
 
 
-def detect_tx_from_cellname(cell_name):
-    """Detect TX configuration from LTE cell name"""
-    if pd.isna(cell_name):
-        return None
-
-    cell_str = str(cell_name).upper()
-
-    # Pattern detection based on cell name prefix
-    # Priority order matters!
-
-    # 32T32R: N_AC4G23 or explicit 32T32R
-    if "N_AC4G23" in cell_str or "32T32R" in cell_str:
-        return "32T32R"
-
-    # 8T8R: explicit marker
-    if "8T8R" in cell_str or "_8T8R" in cell_str:
-        return "8T8R"
-
-    # 4T4R: AC4G18, AC4G21 (1800/2100 MHz bands)
-    if "AC4G18" in cell_str or "AC4G21" in cell_str:
-        return "4T4R"
-
-    if "4T4R" in cell_str or "_4T4R" in cell_str:
-        return "4T4R"
-
-    # 2T2R: AC4G85 (850 MHz band) or explicit marker
-    if "AC4G85" in cell_str or "N_AC4G85" in cell_str:
-        return "2T2R"
-
-    if "2T2R" in cell_str or "_2T2R" in cell_str:
-        return "2T2R"
-
-    # If no pattern matches, return None
-    return None
-
-
-def extract_band_from_cellname(cell_name):
-    """Extract frequency band from LTE cell name - GENERIC pattern"""
-    if pd.isna(cell_name):
-        return None
-
-    cell_str = str(cell_name).upper()
-
-    # Generic pattern: support AC4G, MD4G, and other variants
-    # Pattern: {prefix}4G{code}
-
-    import re
-
-    # Try to find pattern: any prefix + 4G + number
-    match = re.search(r"(?:[A-Z_]+)?4G(\d+)", cell_str)
-    if match:
-        band_code = match.group(1)
-
-        # Map code to frequency
-        code_to_freq = {
-            "85": 850,
-            "18": 1800,
-            "21": 2100,
-            "23": 2300,
+def get_latest_date_and_periods(dates):
+    """
+    Find latest date and create 3 periods of 30 days each from 90 days before latest.
+    
+    Returns:
+        dict: {
+            'latest_date': datetime,
+            'start_date': datetime,
+            'period_1': {'start': datetime, 'end': datetime, 'label': str, 'name': str},
+            'period_2': {'start': datetime, 'end': datetime, 'label': str, 'name': str},
+            'period_3': {'start': datetime, 'end': datetime, 'label': str, 'name': str}
         }
+    """
+    if len(dates) == 0:
+        return None
+    
+    dates_clean = pd.to_datetime(dates).dropna()
+    if len(dates_clean) == 0:
+        return None
+    
+    latest_date = dates_clean.max()
+    start_date = latest_date - timedelta(days=89)  # 90 days including latest
+    
+    # Period 3 (Most Recent): Days 61-90
+    period_3_end = latest_date
+    period_3_start = latest_date - timedelta(days=29)
+    
+    # Period 2 (Middle): Days 31-60
+    period_2_end = period_3_start - timedelta(days=1)
+    period_2_start = period_2_end - timedelta(days=29)
+    
+    # Period 1 (Oldest): Days 1-30
+    period_1_end = period_2_start - timedelta(days=1)
+    period_1_start = start_date
+    
+    # Get month labels for each period (use the most common month in each period)
+    def get_period_label(start, end):
+        """Get label as MMM-YY from middle of period"""
+        mid_date = start + (end - start) / 2
+        return mid_date.strftime("%b-%y")
+    
+    return {
+        'latest_date': latest_date,
+        'start_date': start_date,
+        'period_1': {
+            'start': period_1_start,
+            'end': period_1_end,
+            'label': get_period_label(period_1_start, period_1_end),
+            'name': 'Period 1'
+        },
+        'period_2': {
+            'start': period_2_start,
+            'end': period_2_end,
+            'label': get_period_label(period_2_start, period_2_end),
+            'name': 'Period 2'
+        },
+        'period_3': {
+            'start': period_3_start,
+            'end': period_3_end,
+            'label': get_period_label(period_3_start, period_3_end),
+            'name': 'Period 3'
+        }
+    }
 
-        return code_to_freq.get(band_code, None)
 
-    return None
+def assign_period_to_date(date_val, period_info):
+    """
+    Assign a date to one of the 3 periods.
+    
+    Returns:
+        str: 'Period 1', 'Period 2', or 'Period 3', or None if outside range
+    """
+    if pd.isna(date_val) or period_info is None:
+        return None
+    
+    date = pd.to_datetime(date_val)
+    
+    if period_info['period_1']['start'] <= date <= period_info['period_1']['end']:
+        return 'Period 1'
+    elif period_info['period_2']['start'] <= date <= period_info['period_2']['end']:
+        return 'Period 2'
+    elif period_info['period_3']['start'] <= date <= period_info['period_3']['end']:
+        return 'Period 3'
+    else:
+        return None
+
+
+def format_period_date_range(period_dict):
+    """
+    Format period date range for display in dd-MMMM format
+    Example: "19-September to 18-October"
+    
+    Args:
+        period_dict: dict with 'start' and 'end' keys (datetime objects)
+    
+    Returns:
+        str: formatted date range
+    """
+    try:
+        start = period_dict['start']
+        end = period_dict['end']
+        
+        # Convert to datetime if needed
+        if isinstance(start, str):
+            start = pd.to_datetime(start)
+        if isinstance(end, str):
+            end = pd.to_datetime(end)
+        
+        return format_date_range(start, end)
+    except Exception as e:
+        print(f"⚠ Error formatting period date range: {e}")
+        import traceback
+        traceback.print_exc()
+        return "N/A"
